@@ -1,30 +1,45 @@
-# AI-Powered Group Travel Planning System
+# Travel Planer — AI copilot for group trips
 
-**Enterprise Agentic Platform for Collaborative Trip Coordination**
+## ⭐ Core Mission
 
-## How It Works (MVP)
+Centralize planning so friend groups decide faster, stay fair on money, and lock an itinerary with zero chaos. 
 
-1. Trip creator fills out web form with participant emails and trip constraints
-2. Participants receive email link to preference survey (web form)
-3. AI agents analyze responses and generate 3-5 destination recommendations
-4. Group votes on destinations using ranked-choice voting
-5. Winning destination triggers itinerary generation agent
-6. System delivers day-by-day plan with booking links
+## 🔧 The Problem We Solve
 
-## Core Agents (MVP)
+Group trips melt down across chats, docs, polls, and payments with no single source of truth. 
 
-1. **Orchestrator Agent**: Manages workflow state
-2. **Preference Analysis Agent**: Extracts patterns from survey responses
-3. **Destination Research Agent**: Matches destinations to preferences
-4. **Voting Coordinator Agent**: Runs ranked-choice algorithm
-5. **Conflict Resolution Agent**: Proposes compromises if no consensus
-6. **Itinerary Generation Agent**: Creates detailed day-by-day plans
+* **Scattered info**: Links, polls, and budgets live in five apps → **One hub** that tracks decisions and next steps. 
+* **Scheduling hell**: Nobody updates calendars → **Auto calendar sync** and smart date picks. 
+* **Indecision & overwhelm**: Too many options, vague preferences → **Structured polls** plus summaries that surface consensus. 
+* **Budget drama**: Unclear who owes what → **Transparent ledger** with expense allocation. 
+* **No clear owner**: Planning stalls → **AI facilitator** that nudges, mediates, and closes loops. 
 
-## Tech Stack (MVP)
+## 💡 Our Solution
 
-- **Backend**: Python FastAPI + MongoDB + Redis
-- **Agent Framework**: LangChain + LangGraph
-- **LLM**: OpenAI GPT-4
-- **Frontend**: React.js
-- **Deployment**: Docker Compose on single VM
-- **APIs**: Google Maps (routing), Google OAuth (auth), Amadeus (flights) - others mocked
+Agentic planner that gathers preferences, proposes balanced options, checks real-time prices, and automates logistics end to end. 
+
+* **AI summaries** of chats and forms to track decisions and tasks
+* **Consensus tools**: ranked voting and explainable picks
+* **Date picker** powered by calendar availability
+* **Real-time pricing** for flights and stays with cached lookups
+* **Budget & payments**: cost split, participation tracking, exportable receipts 
+
+## 🔄 Multi-Agent Orchestration System
+
+A coordinated pipeline of specialized agents that turns surveys and chats into a locked plan. 
+
+* **Preference Agent**: embeds group tastes for matching
+* **Destination Research Agent**: surfaces similar places
+* **Pricing Agent**: polls flight/hotel APIs in real time
+* **Voting Coordinator**: instant-runoff to reach fairness
+* **Itinerary Agent**: route optimization with maps
+* **Budget Optimizer**: finds savings and allocates costs
+* **Verifier**: checks timing, availability, accessibility 
+
+## ✨ Key Benefits
+
+* **Fewer messages, more decisions**: one source of truth with automatic summaries
+* **Faster time to “locked”**: clear next steps and nudges
+* **Fair by design**: everyone’s voice counted, conflicts mediated
+* **Cheaper trips**: live deals and budget control
+* **Full transparency**: who’s paying what, what’s decided, what’s left 
