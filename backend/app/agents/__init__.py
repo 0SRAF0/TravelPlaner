@@ -7,7 +7,7 @@ from .preference_agent import (
     cosine,
     get_embedding_model,
     UserPreferenceProfile,
-    GroupPreferenceAggregate,
+    TripPreferenceAggregate,
     ScoredItem,
 )
 
@@ -19,7 +19,7 @@ __all__ = [
     'cosine',
     'get_embedding_model',
     'UserPreferenceProfile',
-    'GroupPreferenceAggregate',
+    'TripPreferenceAggregate',
     'ScoredItem',
 ]
 

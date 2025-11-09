@@ -11,7 +11,7 @@ import hashlib
 import numpy as np
 
 from app.agents.agent_state import AgentState
-from app.agents.tools import get_all_group_preferences
+from app.agents.tools import get_all_trip_preferences
 
 AGENT_LABEL = "preference"
 
@@ -89,7 +89,7 @@ class SurveyInput:
 @dataclass
 class UserPreferenceProfile:
     """Complete user preference profile with embedding."""
-    group_id: str
+    trip_id: str
     user_id: str
     hard: Dict[str, str]
     soft: Dict[str, float]
@@ -101,9 +101,9 @@ class UserPreferenceProfile:
 
 
 @dataclass
-class GroupPreferenceAggregate:
-    """Aggregated preferences for entire group."""
-    group_id: str
+class TripPreferenceAggregate:
+    """Aggregated preferences for entire trip."""
+    trip_id: str
     members: List[str]
     hard_union: Dict[str, List[str]]
     soft_mean: Dict[str, float]
@@ -126,6 +126,12 @@ class ScoredItem:
     id: str
     score: float
     reason: str
+
+
+@dataclass
+class UpdateDelta:
+    """Represents changes made during an update."""
+    changed: Dict[str, Tuple[str, str]]  # field -> (old_value, new_value)
 
 
 # ========== Vector Index ==========
@@ -153,9 +159,9 @@ class PreferenceAgent:
     Preference agent for aggregation and semantic search.
 
     Responsibilities:
-    - Fetch preferences from database by group_id
+    - Fetch preferences from database by trip_id
     - Create vector embeddings for semantic search
-    - Aggregate group preferences
+    - Aggregate trip preferences
     - Provide recommendations via semantic similarity
 
     NOT responsible for:
@@ -182,7 +188,7 @@ class PreferenceAgent:
         # In-memory storage
         self.index = VectorIndex(self.dim)
         self.profiles: Dict[Tuple[str, str], UserPreferenceProfile] = {}
-        self.groups: Dict[str, List[str]] = {}
+        self.trips: Dict[str, List[str]] = {}
         
         # LLM (optional, lazy-loaded)
         self._llm = None
@@ -201,9 +207,9 @@ class PreferenceAgent:
 
     # ========== Vector Embedding Methods ==========
 
-    def _vec_key(self, group_id: str, user_id: str) -> str:
+    def _vec_key(self, trip_id: str, user_id: str) -> str:
         """Generate vector key."""
-        raw = f"{group_id}:{user_id}:prefs"
+        raw = f"{trip_id}:{user_id}:prefs"
         short = hashlib.md5(raw.encode("utf-8")).hexdigest()[:6]
         return f"vec_{short}"
 
@@ -279,22 +285,22 @@ class PreferenceAgent:
 
     def _fetch_and_process(self, state: AgentState) -> AgentState:
         """
-        Fetch all preferences for group_id and create embeddings.
+        Fetch all preferences for trip_id and create embeddings.
         This is the main node that does all the work.
         """
-        group_id = state.get("group_id") or state.get("trip_id")
+        trip_id = state.get("trip_id") or state.get("trip_id")
 
-        if not group_id:
+        if not trip_id:
             return {
-                "messages": [AIMessage(content="[preference] Error: No group_id provided")],
+                "messages": [AIMessage(content="[preference] Error: No trip_id provided")],
                 "done": True
             }
 
-        print(f"[preference._fetch_and_process] Fetching preferences for group: {group_id}")
+        print(f"[preference._fetch_and_process] Fetching preferences for trip: {trip_id}")
 
         try:
             # Fetch preferences from database
-            result = get_all_group_preferences.invoke({"group_id": group_id})
+            result = get_all_trip_preferences.invoke({"trip_id": trip_id})
 
             if "_error" in result:
                 return {
@@ -319,7 +325,7 @@ class PreferenceAgent:
                     vec = embed_text(summary)
 
                     profile = UserPreferenceProfile(
-                        group_id=group_id,
+                        trip_id=trip_id,
                         user_id=pref.user_id,
                         hard=hard,
                         soft=soft,
@@ -329,14 +335,14 @@ class PreferenceAgent:
                     )
 
                     # Store profile
-                    key = (group_id, pref.user_id)
+                    key = (trip_id, pref.user_id)
                     self.profiles[key] = profile
-                    self.index.upsert(self._vec_key(group_id, pref.user_id), vec)
+                    self.index.upsert(self._vec_key(trip_id, pref.user_id), vec)
 
-                    # Update groups
-                    self.groups.setdefault(group_id, [])
-                    if pref.user_id not in self.groups[group_id]:
-                        self.groups[group_id].append(pref.user_id)
+                    # Update trips
+                    self.trips.setdefault(trip_id, [])
+                    if pref.user_id not in self.trips[trip_id]:
+                        self.trips[trip_id].append(pref.user_id)
 
                     profiles_created += 1
 
@@ -347,10 +353,10 @@ class PreferenceAgent:
             print(f"[preference._fetch_and_process] Created {profiles_created} profiles with embeddings")
 
             # Aggregate preferences
-            aggregate = self.aggregate(group_id)
+            aggregate = self.aggregate(trip_id)
 
             summary_msg = f"""
-                [preference] Processing complete for group {group_id}:
+                [preference] Processing complete for trip {trip_id}:
                 - Members: {len(aggregate.members)}
                 - Top vibes: {dict(sorted(aggregate.soft_mean.items(), key=lambda x: -x[1])[:5])}
                 - Budget levels: {aggregate.hard_union.get('budget_level', [])}
@@ -361,7 +367,7 @@ class PreferenceAgent:
 
             # Store output in agent_data (generic storage)
             preferences_summary = {
-                "group_id": group_id,
+                "trip_id": trip_id,
                 "members": aggregate.members,
                 "aggregated_vibes": aggregate.soft_mean,
                 "budget_levels": aggregate.hard_union.get("budget_level", []),
@@ -371,7 +377,7 @@ class PreferenceAgent:
             }
 
             return {
-                "group_id": group_id,
+                "trip_id": trip_id,
                 "agent_data": {
                     "preferences_summary": preferences_summary
                 },
@@ -407,45 +413,45 @@ class PreferenceAgent:
         """Run the LangGraph agent with given initial state."""
         return self.app.invoke(initial_state)
 
-    def process_group(self, group_id: str) -> Dict[str, Any]:
+    def process_trip(self, trip_id: str) -> Dict[str, Any]:
         """
-        Process all preferences for a group.
+        Process all preferences for a trip.
         Fetches from database, creates embeddings, and aggregates.
 
         Args:
-            group_id: Group identifier
+            trip_id: Trip identifier
 
         Returns:
             State with aggregated preferences and embeddings ready for search
         """
         initial_state: AgentState = {
             "messages": [],
-            "group_id": group_id,
+            "trip_id": trip_id,
             "user_id": ""
         }
 
         return self.run(initial_state)
 
-    def aggregate(self, group_id: str) -> GroupPreferenceAggregate:
+    def aggregate(self, trip_id: str) -> TripPreferenceAggregate:
         """
-        Aggregate all preferences for a group (using in-memory profiles).
+        Aggregate all preferences for a trip (using in-memory profiles).
 
         Args:
-            group_id: Group identifier
+            trip_id: Trip identifier
 
         Returns:
-            GroupPreferenceAggregate with combined preferences
+            TripPreferenceAggregate with combined preferences
         """
-        members = self.groups.get(group_id, [])
+        members = self.trips.get(trip_id, [])
         if not members:
-            return GroupPreferenceAggregate(group_id, [], {}, {}, [], 0.0, False)
+            return TripPreferenceAggregate(trip_id, [], {}, {}, [], 0.0, False)
 
         hard_union: Dict[str, List[str]] = {}
         soft_accum: Dict[str, float] = {}
         soft_count: Dict[str, int] = {}
 
         for uid in members:
-            p = self.profiles.get((group_id, uid))
+            p = self.profiles.get((trip_id, uid))
             if not p:
                 continue
 
@@ -462,26 +468,114 @@ class PreferenceAgent:
 
         soft_mean = {k: soft_accum[k] / max(1, soft_count[k]) for k in soft_accum}
         conflicts = self._detect_conflicts(hard_union)
-        coverage = len([uid for uid in members if (group_id, uid) in self.profiles]) / len(members) if members else 0.0
+        coverage = len([uid for uid in members if (trip_id, uid) in self.profiles]) / len(members) if members else 0.0
         ready = coverage >= 0.8 and not conflicts
 
-        return GroupPreferenceAggregate(group_id, members, hard_union, soft_mean, conflicts, coverage, ready)
+        return TripPreferenceAggregate(trip_id, members, hard_union, soft_mean, conflicts, coverage, ready)
 
-    def query_similar(self, group_id: str, items: List[ItemCandidate], k: int = 5) -> List[ScoredItem]:
+    def ingest_survey(self, trip_id: str, user_id: str, survey: SurveyInput) -> UserPreferenceProfile:
         """
-        Find items most similar to group preferences using semantic search.
+        Manually ingest a user preference survey (for testing/direct input).
+        
+        Args:
+            trip_id: Trip identifier
+            user_id: User identifier
+            survey: SurveyInput with text, hard constraints, and soft preferences
+            
+        Returns:
+            UserPreferenceProfile created from the survey
+        """
+        # Use survey data directly
+        hard = survey.hard.copy() if survey.hard else {}
+        soft = survey.soft.copy() if survey.soft else {}
+        summary = survey.text or ""
+        
+        # Create embedding
+        vec = embed_text(summary)
+        
+        # Create profile
+        profile = UserPreferenceProfile(
+            trip_id=trip_id,
+            user_id=user_id,
+            hard=hard,
+            soft=soft,
+            summary=summary,
+            vector=vec,
+            source="survey"
+        )
+        
+        # Store profile
+        key = (trip_id, user_id)
+        self.profiles[key] = profile
+        self.index.upsert(self._vec_key(trip_id, user_id), vec)
+        
+        # Update trips
+        self.trips.setdefault(trip_id, [])
+        if user_id not in self.trips[trip_id]:
+            self.trips[trip_id].append(user_id)
+        
+        return profile
+
+    def update(self, trip_id: str, user_id: str, updates: Dict[str, str]) -> UpdateDelta:
+        """
+        Update specific fields in a user's preference profile.
+        
+        Args:
+            trip_id: Trip identifier
+            user_id: User identifier
+            updates: Dictionary of field paths to new values (e.g., {"hard.budget_level": "4"})
+            
+        Returns:
+            UpdateDelta showing what changed
+        """
+        key = (trip_id, user_id)
+        profile = self.profiles.get(key)
+        
+        if not profile:
+            raise ValueError(f"No profile found for trip={trip_id}, user={user_id}")
+        
+        changed = {}
+        
+        for field_path, new_value in updates.items():
+            if field_path.startswith("hard."):
+                field_name = field_path.split(".", 1)[1]
+                old_value = profile.hard.get(field_name, "")
+                profile.hard[field_name] = new_value
+                changed[field_path] = (old_value, new_value)
+                
+            elif field_path.startswith("soft."):
+                field_name = field_path.split(".", 1)[1]
+                old_value = str(profile.soft.get(field_name, 0.0))
+                try:
+                    profile.soft[field_name] = float(new_value)
+                    changed[field_path] = (old_value, new_value)
+                except ValueError:
+                    pass
+        
+        # Update profile version and timestamp
+        profile.version += 1
+        profile.updated_at = time.time()
+        
+        # Store updated profile
+        self.profiles[key] = profile
+        
+        return UpdateDelta(changed=changed)
+
+    def query_similar(self, trip_id: str, items: List[ItemCandidate], k: int = 5) -> List[ScoredItem]:
+        """
+        Find items most similar to trip preferences using semantic search.
 
         Args:
-            group_id: Group identifier
+            trip_id: Trip identifier
             items: List of candidate items to score
             k: Number of top items to return
 
         Returns:
             List of top-k scored items
         """
-        agg = self.aggregate(group_id)
+        agg = self.aggregate(trip_id)
 
-        # Build weighted terms for group
+        # Build weighted terms for trip
         weighted_terms = []
         for tag, weight in sorted(agg.soft_mean.items(), key=lambda x: -x[1])[:20]:
             repeat_count = max(1, int(weight * 5))
@@ -500,30 +594,30 @@ class PreferenceAgent:
                     except:
                         pass
 
-        group_text = " ".join(weighted_terms)
-        group_vec = embed_text(group_text)
+        trip_text = " ".join(weighted_terms)
+        trip_vec = embed_text(trip_text)
 
         # Score items
         scored: List[ScoredItem] = []
         for it in items:
             vec = embed_text(it.text)
-            s = cosine(group_vec, vec)
+            s = cosine(trip_vec, vec)
             scored.append(ScoredItem(id=it.id, score=float(s), reason="semantic match"))
 
         scored.sort(key=lambda x: x.score, reverse=True)
         return scored[:k]
 
-    def get_group_vector(self, group_id: str) -> Optional[List[float]]:
+    def get_trip_vector(self, trip_id: str) -> Optional[List[float]]:
         """
-        Get the aggregated vector for a group.
+        Get the aggregated vector for a trip.
 
         Args:
-            group_id: Group identifier
+            trip_id: Trip identifier
 
         Returns:
-            Aggregated vector representing group preferences
+            Aggregated vector representing trip preferences
         """
-        agg = self.aggregate(group_id)
+        agg = self.aggregate(trip_id)
 
         if not agg.members:
             return None
@@ -548,8 +642,10 @@ __all__ = [
     "cosine",
     "get_embedding_model",
     "UserPreferenceProfile",
-    "GroupPreferenceAggregate",
-    "ScoredItem"
+    "TripPreferenceAggregate",
+    "ScoredItem",
+    "SurveyInput",
+    "UpdateDelta"
 ]
 
 # ========== Self-Test ==========
@@ -586,12 +682,13 @@ if __name__ == "__main__":
 
     # Mock preferences
     pref1 = Preference(
-        group_id="test_group",
+        trip_id="test_trip",
         user_id="user_1",
         budget_level=3,
         vibes=["Adventure", "Food"],
         deal_breaker="No hostels",
-        notes="Love hiking"
+        notes="Love hiking",
+        available_dates=["2024-06-01:2024-06-15"]
     )
 
     # Create profile manually
@@ -614,18 +711,18 @@ if __name__ == "__main__":
     # Manually add a profile for testing
     vec = embed_text(summary)
     profile = UserPreferenceProfile(
-        group_id="test_group",
+        trip_id="test_trip",
         user_id="user_1",
         hard=hard,
         soft=soft,
         summary=summary,
         vector=vec
     )
-    agent.profiles[("test_group", "user_1")] = profile
-    agent.groups["test_group"] = ["user_1"]
-    agent.index.upsert(agent._vec_key("test_group", "user_1"), vec)
+    agent.profiles[("test_trip", "user_1")] = profile
+    agent.trips["test_trip"] = ["user_1"]
+    agent.index.upsert(agent._vec_key("test_trip", "user_1"), vec)
 
-    recommendations = agent.query_similar("test_group", items, k=3)
+    recommendations = agent.query_similar("test_trip", items, k=3)
     print("Recommendations:")
     for rec in recommendations:
         item = next(it for it in items if it.id == rec.id)

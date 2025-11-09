@@ -46,7 +46,7 @@ Registry (key → capability):
 {registry_block}
 
 Routing rules:
-1) If group_id exists and no preferences_summary → preference_processor (fetch and aggregate)
+1) If trip_id exists and no preferences_summary → preference_processor (fetch and aggregate)
 2) If preferences_summary exists and goal involves planning → itinerary_planner (future)
 3) If all relevant items are done or goal accomplished → end
 
@@ -56,11 +56,11 @@ Return JSON only.
 
 def _needs_preference_processing(state: AgentState) -> bool:
     """Check if preferences need to be fetched and processed."""
-    # Check if we have a group_id and haven't processed yet
-    group_id = state.get("group_id") or state.get("trip_id")
+    # Check if we have a trip_id and haven't processed yet
+    trip_id = state.get("trip_id")
     agent_data = state.get("agent_data", {}) or {}
     has_summary = agent_data.get("preferences_summary") is not None
-    return bool(group_id) and not has_summary
+    return bool(trip_id) and not has_summary
 
 
 def supervisor_agent(state: AgentState) -> AgentState:
@@ -86,10 +86,10 @@ def supervisor_agent(state: AgentState) -> AgentState:
 
     # Build LLM prompt with snapshot + registry
     registry_block = "\n".join([f"- {k}: {v['desc']}" for k, v in WORKERS.items()])
-    group_id = state.get("group_id") or state.get("trip_id")
+    trip_id = state.get("trip_id") or state.get("trip_id")
     agent_data = state.get("agent_data", {}) or {}
     snapshot = {
-        "group_id": group_id,
+        "trip_id": trip_id,
         "user_id": state.get("user_id"),
         "goal": state.get("goal", ""),
         "has_preferences_summary": bool(agent_data.get("preferences_summary")),
@@ -181,14 +181,14 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     Run the orchestrator with an initial state.
 
     Args:
-        initial_state: Initial state containing group_id, user_id, goal, etc.
+        initial_state: Initial state containing trip_id, user_id, goal, etc.
 
     Returns:
         Final state after workflow completion
     """
     base: AgentState = {
         "messages": [],
-        "group_id": "",
+        "trip_id": "",
         "user_id": "",
         "agent_data": {},
         "agent_scratch": {},
@@ -200,13 +200,13 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     }
     base.update(initial_state or {})
 
-    # Support both group_id and trip_id (backward compatibility)
-    if base.get("trip_id") and not base.get("group_id"):
-        base["group_id"] = base["trip_id"]
+    # Support both trip_id and trip_id (backward compatibility)
+    if base.get("trip_id") and not base.get("trip_id"):
+        base["trip_id"] = base["trip_id"]
 
     print(f"\n{'=' * 60}")
     print(f"Starting orchestrator")
-    print(f"Group ID: {base.get('group_id', 'N/A')}")
+    print(f"Trip ID: {base.get('trip_id', 'N/A')}")
     print(f"User ID: {base.get('user_id', 'N/A')}")
     print(f"Goal: {base.get('goal', 'N/A')}")
     print(f"{'=' * 60}\n")
@@ -226,9 +226,9 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
 if __name__ == "__main__":
     initial_state: AgentState = {
         "messages": [HumanMessage(content="I want to plan a trip to Japan")],
-        "group_id": "group_123",
+        "trip_id": "trip_123",
         "user_id": "user_456",
-        "goal": "Fetch and aggregate group preferences for Japan trip"
+        "goal": "Fetch and aggregate trip preferences for Japan trip"
     }
 
     result = run_orchestrator_agent(initial_state)
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     agent_data = result.get('agent_data', {})
     summary = agent_data.get('preferences_summary')
     if summary:
-        print(f"\nGroup: {summary.get('group_id')}")
+        print(f"\nTrip: {summary.get('trip_id')}")
         print(f"Members: {summary.get('members')}")
         print(f"Ready for planning: {summary.get('ready_for_planning')}")
         print(f"Aggregated vibes: {summary.get('aggregated_vibes')}")

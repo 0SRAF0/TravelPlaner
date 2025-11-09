@@ -8,19 +8,19 @@ from app.models.preference import Preference
 
 
 @tool
-async def get_all_group_preferences(group_id: str) -> Dict[str, Any]:
+async def get_all_trip_preferences(trip_id: str) -> Dict[str, Any]:
     """
-    Fetch all user preferences for a specific group.
+    Fetch all user preferences for a specific trip.
 
     Args:
-        group_id: The ID of the group
+        trip_id: The ID of the trip
 
     Returns:
-        A dictionary containing all preferences for the group
+        A dictionary containing all preferences for the trip
     """
     try:
         col = get_preferences_collection()
-        preferences = await col.find({"group_id": group_id}).to_list(length=None)
+        preferences = await col.find({"trip_id": trip_id}).to_list(length=None)
 
         # Convert ObjectId to string
         for pref in preferences:
@@ -28,7 +28,7 @@ async def get_all_group_preferences(group_id: str) -> Dict[str, Any]:
                 pref["_id"] = str(pref["_id"])
 
         return {
-            "group_id": group_id,
+            "trip_id": trip_id,
             "preferences": preferences,
             "count": len(preferences)
         }

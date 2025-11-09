@@ -10,7 +10,7 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 # Keep a single in-memory agent instance (simple, non-persistent)
 _agent = PreferenceAgent()
-_GROUP_ID = "default"
+_TRIP_ID = "default"
 
 # Allowed top-level vibe cards and mapping to agent tags (6 canonical vibes)
 _VIBE_MAP: Dict[str, str] = {
@@ -26,33 +26,34 @@ _VIBE_MAP: Dict[str, str] = {
 # Request/Response Models
 class PreferenceRequest(BaseModel):
     """Request model for adding/updating preferences"""
-    group_id: Optional[str] = None
+    trip_id: Optional[str] = None
     user_id: str
     budget_level: Optional[int] = Field(default=None, ge=1, le=4, description="1=Budget, 2=Moderate, 3=Comfort, 4=Luxury")
     vibes: List[str] = Field(default_factory=list, description="Up to 6 cards: Adventure, Food, Nightlife, Culture, Relax, Nature")
     deal_breaker: Optional[str] = None
     notes: Optional[str] = None
+    available_dates: List[str] = Field(default_factory=list, description="Available date ranges (ISO format)")
 
 
 class PreferenceResponse(BaseModel):
     """Response after adding/updating a preference"""
     success: bool
     user_id: str
-    group_id: str
+    trip_id: str
     message: str = "Preference saved successfully"
 
 
 class SubmitResponse(BaseModel):
     """Response after submitting preferences to agent"""
     success: bool
-    group_id: str
+    trip_id: str
     preferences_ingested: int
     message: str = "Preferences submitted to agent successfully"
 
 
-class GroupAggregateResponse(BaseModel):
-    """Aggregated preferences for a group"""
-    group_id: str
+class TripAggregateResponse(BaseModel):
+    """Aggregated preferences for a trip"""
+    trip_id: str
     members: List[str]
     member_count: int
     coverage: float
@@ -65,7 +66,7 @@ class GroupAggregateResponse(BaseModel):
 class UserProfileResponse(BaseModel):
     """Individual user preference profile"""
     user_id: str
-    group_id: str
+    trip_id: str
     hard_constraints: Dict[str, str]
     soft_preferences: Dict[str, float]
     summary: str
@@ -107,14 +108,16 @@ async def add_preference(body: PreferenceRequest):
     - 4: Luxury
     
     **Vibes:** Adventure, Food, Nightlife, Culture, Relax, Nature
+    
+    **Available Dates:** List of date ranges in ISO format (e.g., ["2024-06-01:2024-06-15"])
     """
-    gid = body.group_id or _GROUP_ID
+    tid = body.trip_id or _TRIP_ID
     uid = body.user_id
 
     col = get_preferences_collection()
     
     # Check if preference already exists
-    existing_preference = await col.find_one({"group_id": gid, "user_id": uid})
+    existing_preference = await col.find_one({"trip_id": tid, "user_id": uid})
     
     current_time = datetime.utcnow()
     is_update = existing_preference is not None
@@ -122,29 +125,31 @@ async def add_preference(body: PreferenceRequest):
     if existing_preference:
         # Update existing preference using Preference model
         preference_doc = Preference(
-            group_id=gid,
+            trip_id=tid,
             user_id=uid,
             budget_level=body.budget_level,
             vibes=body.vibes or [],
             deal_breaker=body.deal_breaker,
             notes=body.notes,
+            available_dates=body.available_dates or [],
             created_at=existing_preference.get("created_at", current_time),
             updated_at=current_time
         )
         
         await col.update_one(
-            {"group_id": gid, "user_id": uid},
+            {"trip_id": tid, "user_id": uid},
             {"$set": preference_doc.model_dump(exclude={"created_at"})}
         )
     else:
         # Create new preference using Preference model
         preference_doc = Preference(
-            group_id=gid,
+            trip_id=tid,
             user_id=uid,
             budget_level=body.budget_level,
             vibes=body.vibes or [],
             deal_breaker=body.deal_breaker,
             notes=body.notes,
+            available_dates=body.available_dates or [],
             created_at=current_time,
             updated_at=current_time
         )
@@ -171,40 +176,40 @@ async def add_preference(body: PreferenceRequest):
         hard["deal_breakers"] = ", ".join(deal_breakers)
     
     # Ingest into agent
-    _agent.ingest_survey(gid, uid, SurveyInput(text=free_text, hard=hard, soft=scorecard))
+    _agent.ingest_survey(tid, uid, SurveyInput(text=free_text, hard=hard, soft=scorecard))
 
     message = f"Preference {'updated' if is_update else 'created'} and ingested into agent"
     return PreferenceResponse(
         success=True,
         user_id=uid,
-        group_id=gid,
+        trip_id=tid,
         message=message
     )
 
 
 @router.post("/submit", response_model=SubmitResponse)
 async def submit_preferences(
-    group_id: Optional[str] = Query(None, description="Group ID to submit preferences for")
+    trip_id: Optional[str] = Query(None, description="Trip ID to submit preferences for")
 ):
     """
-    Submit all preferences for a group to the agent for aggregation.
+    Submit all preferences for a trip to the agent for aggregation.
     
-    - Fetches all preferences with the same group_id from MongoDB
+    - Fetches all preferences with the same trip_id from MongoDB
     - Ingests them into the preference agent
     - Prepares data for aggregation
     
-    This should be called after all group members have added their preferences.
+    This should be called after all trip members have added their preferences.
     """
-    gid = group_id or _GROUP_ID
+    tid = trip_id or _TRIP_ID
     
-    # Fetch all preferences for this group from the database
+    # Fetch all preferences for this trip from the database
     col = get_preferences_collection()
-    preferences = await col.find({"group_id": gid}).to_list(length=None)
+    preferences = await col.find({"trip_id": tid}).to_list(length=None)
     
     if not preferences:
         raise HTTPException(
             status_code=404, 
-            detail=f"No preferences found for group_id: {gid}"
+            detail=f"No preferences found for trip_id: {tid}"
         )
     
     # Ingest each preference into the agent
@@ -241,22 +246,22 @@ async def submit_preferences(
             hard["deal_breakers"] = ", ".join(deal_breakers)
         
         # Ingest into agent
-        _agent.ingest_survey(gid, uid, SurveyInput(text=free_text, hard=hard, soft=scorecard))
+        _agent.ingest_survey(tid, uid, SurveyInput(text=free_text, hard=hard, soft=scorecard))
         ingested_count += 1
     
     return SubmitResponse(
         success=True,
-        group_id=gid,
+        trip_id=tid,
         preferences_ingested=ingested_count
     )
 
 
-@router.get("/aggregate", response_model=GroupAggregateResponse)
-async def get_group_aggregate(
-    group_id: Optional[str] = Query(None, description="Group ID to get aggregated preferences for")
+@router.get("/aggregate", response_model=TripAggregateResponse)
+async def get_trip_aggregate(
+    trip_id: Optional[str] = Query(None, description="Trip ID to get aggregated preferences for")
 ):
     """
-    Get aggregated preferences for a group.
+    Get aggregated preferences for a trip.
     
     Returns:
     - Averaged vibe weights (soft preferences)
@@ -267,15 +272,15 @@ async def get_group_aggregate(
     
     This data is used by the Trip Planning/Itinerary Agent.
     """
-    gid = group_id or _GROUP_ID
+    tid = trip_id or _TRIP_ID
     
     # Get aggregation from agent
-    agg = _agent.aggregate(gid)
+    agg = _agent.aggregate(tid)
     
     if not agg.members:
         raise HTTPException(
             status_code=404,
-            detail=f"No preferences have been submitted for group_id: {gid}"
+            detail=f"No preferences have been submitted for trip_id: {tid}"
         )
     
     # Format conflicts
@@ -284,8 +289,8 @@ async def get_group_aggregate(
         for key, reason in agg.conflicts
     ]
     
-    return GroupAggregateResponse(
-        group_id=agg.group_id,
+    return TripAggregateResponse(
+        trip_id=agg.trip_id,
         members=agg.members,
         member_count=len(agg.members),
         coverage=agg.coverage,
@@ -299,7 +304,7 @@ async def get_group_aggregate(
 @router.get("/user/{user_id}", response_model=UserProfileResponse)
 async def get_user_profile(
     user_id: str,
-    group_id: Optional[str] = Query(None, description="Group ID")
+    trip_id: Optional[str] = Query(None, description="Trip ID")
 ):
     """
     Get individual user preference profile.
@@ -310,26 +315,26 @@ async def get_user_profile(
     - Embedding summary
     - Vector ID (for semantic search)
     
-    Useful for personalizing recommendations within the group aggregate.
+    Useful for personalizing recommendations within the trip aggregate.
     """
-    gid = group_id or _GROUP_ID
+    tid = trip_id or _TRIP_ID
     
     # Get profile from agent
-    profile = _agent.profiles.get((gid, user_id))
+    profile = _agent.profiles.get((tid, user_id))
     
     if not profile:
         raise HTTPException(
             status_code=404,
-            detail=f"No preference profile found for user_id: {user_id} in group_id: {gid}"
+            detail=f"No preference profile found for user_id: {user_id} in trip_id: {tid}"
         )
     
     return UserProfileResponse(
         user_id=profile.user_id,
-        group_id=profile.group_id,
+        trip_id=profile.trip_id,
         hard_constraints=profile.hard,
         soft_preferences=profile.soft,
         summary=profile.summary,
-        vector_id=_agent._vec_key(gid, user_id),
+        vector_id=_agent._vec_key(tid, user_id),
         updated_at=profile.updated_at
     )
 

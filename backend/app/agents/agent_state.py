@@ -10,7 +10,7 @@ class AgentState(TypedDict, total=False):
 
     Core fields:
     - messages: Accumulated conversation history
-    - group_id/trip_id: Primary identifier for group/trip
+    - trip_id: Primary identifier for trip
     - user_id: Current user identifier
     - goal: What the workflow is trying to accomplish
     - next_task: Routing decision for which agent to run next
@@ -34,8 +34,7 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[list, add_messages]
 
     # ========== Identifiers ==========
-    group_id: str  # Primary: group/trip identifier
-    trip_id: str  # Alias for group_id (backward compatibility)
+    trip_id: str  # trip_id
 
     # ========== Workflow Control ==========
     next_task: str  # Orchestrator routing
