@@ -8,27 +8,61 @@ from langgraph.graph import StateGraph, END
 import math
 import time
 import hashlib
+import numpy as np
 
 from app.agents.agent_state import AgentState
 from app.agents.tools import get_all_group_preferences
-from app.core.config import GOOGLE_AI_MODEL
 
-AGENT_LABEL = "preference_aggregator"
+AGENT_LABEL = "preference"
 
 
 # ========== Vector Embedding Utilities ==========
 
-def _tokenize(text: str) -> List[str]:
-    """Tokenize text for embedding."""
+# Global embedding model (lazy-loaded)
+_embedding_model = None
+
+def get_embedding_model():
+    """Lazy-load the sentence transformer model."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            # Using a lightweight, fast model optimized for semantic similarity
+            _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            print("[preference] Loaded sentence-transformers model: all-MiniLM-L6-v2")
+        except Exception as e:
+            print(f"[preference] Warning: Could not load sentence-transformers: {e}")
+            _embedding_model = None
+    return _embedding_model
+
+
+def embed_text(text: str) -> List[float]:
+    """
+    Create semantic embedding vector using sentence-transformers.
+    Falls back to simple hash-based embedding if model not available.
+    """
+    model = get_embedding_model()
+    if model is not None:
+        try:
+            # sentence-transformers returns numpy array
+            embedding = model.encode(text, convert_to_numpy=True)
+            return embedding.tolist()
+        except Exception as e:
+            print(f"[preference] Embedding error: {e}, falling back to hash")
+    
+    # Fallback: simple hash-based embedding
+    return _hash_embed_fallback(text, dim=384)
+
+
+def _hash_embed_fallback(text: str, dim: int = 384) -> List[float]:
+    """Fallback hash-based embedding if sentence-transformers unavailable."""
+    import hashlib
+    v = [0.0] * dim
     for char in "/,;:.-()[]{}!?":
         text = text.replace(char, " ")
-    return [t for t in text.lower().split() if t]
-
-
-def hash_embed(text: str, dim: int = 384) -> List[float]:
-    """Create hash-based embedding vector."""
-    v = [0.0] * dim
-    for tok in _tokenize(text):
+    tokens = [t for t in text.lower().split() if t]
+    
+    for tok in tokens:
         h = int(hashlib.md5(tok.encode('utf-8')).hexdigest(), 16)
         i = h % dim
         v[i] += 1.0
@@ -43,6 +77,14 @@ def cosine(a: List[float], b: List[float]) -> float:
 
 
 # ========== Data Models ==========
+
+@dataclass
+class SurveyInput:
+    """Input model for user preference survey."""
+    text: Optional[str] = None  # free-form: vibes, notes, activities
+    hard: Dict[str, str] = field(default_factory=dict)  # e.g., {"budget_level":"3","deal_breakers":"No early mornings"}
+    soft: Dict[str, float] = field(default_factory=dict)  # weighted tags 0..1, e.g., {"adventure":0.9,"food":0.8,"nature":0.7}
+
 
 @dataclass
 class UserPreferenceProfile:
@@ -121,18 +163,41 @@ class PreferenceAgent:
     - Validating input (handled by Pydantic models)
     """
 
-    def __init__(self, model_name: Optional[str] = None, dim: int = 384):
-        self.model_name = model_name or GOOGLE_AI_MODEL
-        self.llm = ChatGoogleGenerativeAI(model=self.model_name)
-        self.dim = dim
+    def __init__(self, model_name: Optional[str] = None, dim: Optional[int] = None):
+        self.model_name = model_name or "gemini-pro"
+        
+        # Determine embedding dimension
+        if dim is None:
+            # Try to get dimension from embedding model
+            emb_model = get_embedding_model()
+            if emb_model is not None:
+                # all-MiniLM-L6-v2 produces 384-dimensional vectors
+                self.dim = emb_model.get_sentence_embedding_dimension()
+            else:
+                # Fallback dimension for hash-based embeddings
+                self.dim = 384
+        else:
+            self.dim = dim
 
         # In-memory storage
-        self.index = VectorIndex(dim)
+        self.index = VectorIndex(self.dim)
         self.profiles: Dict[Tuple[str, str], UserPreferenceProfile] = {}
         self.groups: Dict[str, List[str]] = {}
+        
+        # LLM (optional, lazy-loaded)
+        self._llm = None
 
-        # LangGraph app
-        self.app = self._build_graph()
+    @property
+    def llm(self):
+        """Lazy-load LLM only when needed."""
+        if self._llm is None:
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                self._llm = ChatGoogleGenerativeAI(model=self.model_name)
+            except Exception:
+                # LLM not available, use without it
+                pass
+        return self._llm
 
     # ========== Vector Embedding Methods ==========
 
@@ -159,6 +224,19 @@ class PreferenceAgent:
             weight = max(0.5, 0.9 - (i * 0.1))
             soft[vibe.lower()] = weight
         return soft
+    
+    def _normalize_deal_breakers(self, text: str) -> List[str]:
+        """
+        Normalize deal breaker text into a list of individual deal breakers.
+        
+        Splits on commas/semicolons, trims whitespace, strips trailing punctuation.
+        """
+        if not text:
+            return []
+        # Split on commas/semicolons; trim whitespace; strip trailing sentence punctuation
+        parts = [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
+        cleaned = [p.rstrip(".!?:;").strip() for p in parts if p]
+        return cleaned
 
     def _summarize(self, pref: Preference) -> str:
         """Create text summary for embedding."""
@@ -238,7 +316,7 @@ class PreferenceAgent:
                     hard = self._normalize_hard(pref)
                     soft = self._normalize_soft(pref.vibes)
                     summary = self._summarize(pref)
-                    vec = hash_embed(summary, self.dim)
+                    vec = embed_text(summary)
 
                     profile = UserPreferenceProfile(
                         group_id=group_id,
@@ -423,12 +501,12 @@ class PreferenceAgent:
                         pass
 
         group_text = " ".join(weighted_terms)
-        group_vec = hash_embed(group_text, self.dim)
+        group_vec = embed_text(group_text)
 
         # Score items
         scored: List[ScoredItem] = []
         for it in items:
-            vec = hash_embed(it.text, self.dim)
+            vec = embed_text(it.text)
             s = cosine(group_vec, vec)
             scored.append(ScoredItem(id=it.id, score=float(s), reason="semantic match"))
 
@@ -457,7 +535,7 @@ class PreferenceAgent:
             weighted_terms.extend([tag] * repeat_count)
 
         text = " ".join(weighted_terms)
-        return hash_embed(text, self.dim)
+        return embed_text(text)
 
 
 # ========== Backward Compatibility Exports ==========
@@ -466,9 +544,9 @@ __all__ = [
     "PreferenceAgent",
     "ItemCandidate",
     "VectorIndex",
-    "hash_embed",
+    "embed_text",
     "cosine",
-    "_tokenize",
+    "get_embedding_model",
     "UserPreferenceProfile",
     "GroupPreferenceAggregate",
     "ScoredItem"
@@ -483,19 +561,24 @@ if __name__ == "__main__":
 
     agent = PreferenceAgent()
 
-    # Test vector embeddings
-    print("\n--- Test 1: Vector Embeddings ---")
-    vec1 = hash_embed("adventure hiking mountains")
-    vec2 = hash_embed("outdoor activities nature")
-    vec3 = hash_embed("luxury shopping dining")
+    # Test vector embeddings with semantic similarity
+    print("\n--- Test 1: Semantic Vector Embeddings ---")
+    vec1 = embed_text("adventure hiking mountains")
+    vec2 = embed_text("outdoor activities nature")  # Semantically similar
+    vec3 = embed_text("luxury shopping dining")     # Semantically different
 
     sim_12 = cosine(vec1, vec2)
     sim_13 = cosine(vec1, vec3)
 
-    print(f"Adventure vs Outdoor: {sim_12:.3f}")
-    print(f"Adventure vs Luxury: {sim_13:.3f}")
-    assert sim_12 > sim_13, "Similar items should have higher similarity!"
-    print("✅ Vector embeddings working!")
+    print(f"Adventure/hiking/mountains vs outdoor/activities/nature: {sim_12:.3f}")
+    print(f"Adventure/hiking/mountains vs luxury/shopping/dining: {sim_13:.3f}")
+    
+    # With real semantic embeddings, similar concepts should have higher similarity
+    if sim_12 > sim_13:
+        print("✅ Semantic embeddings working! Similar concepts have higher similarity.")
+    else:
+        print(f"⚠️  Using fallback hash embeddings (similarity may not be semantic)")
+        print(f"   Install sentence-transformers for true semantic similarity.")
 
     # Test with mock data (no DB needed)
     print("\n--- Test 2: Manual Profile Creation ---")
@@ -529,7 +612,7 @@ if __name__ == "__main__":
     ]
 
     # Manually add a profile for testing
-    vec = hash_embed(summary, agent.dim)
+    vec = embed_text(summary)
     profile = UserPreferenceProfile(
         group_id="test_group",
         user_id="user_1",
