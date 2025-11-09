@@ -19,11 +19,11 @@ def print_section(title: str):
 
 
 def test_preference_agent():
-    """Test the preference agent with multiple users in group 'g1'"""
+    """Test the preference agent with multiple users in trip 'g1'"""
     
     print_section("INITIALIZING PREFERENCE AGENT")
     agent = PreferenceAgent()
-    group_id = "g1"
+    trip_id = "g1"
     
     # Test data: 3 users with different preferences
     test_users = [
@@ -32,21 +32,24 @@ def test_preference_agent():
             "budget_level": 3,  # Comfort
             "vibes": ["Adventure", "Nature", "Food"],
             "deal_breaker": "No early mornings, avoid crowded places",
-            "notes": "Love hiking and outdoor activities. Prefer small authentic restaurants."
+            "notes": "Love hiking and outdoor activities. Prefer small authentic restaurants.",
+            "available_dates": ["2024-06-01:2024-06-15", "2024-07-10:2024-07-31"]
         },
         {
             "user_id": "user_bob",
             "budget_level": 2,  # Moderate
             "vibes": ["Food", "Culture", "Relax"],
             "deal_breaker": "No spicy food",
-            "notes": "Interested in museums and history. Want to try local cuisine."
+            "notes": "Interested in museums and history. Want to try local cuisine.",
+            "available_dates": ["2024-06-05:2024-06-20", "2024-07-01:2024-07-15"]
         },
         {
             "user_id": "user_charlie",
             "budget_level": 3,  # Comfort
             "vibes": ["Nightlife", "Food", "Adventure"],
             "deal_breaker": "Must have vegetarian options",
-            "notes": "Love trying new restaurants and experiencing nightlife."
+            "notes": "Love trying new restaurants and experiencing nightlife.",
+            "available_dates": ["2024-06-10:2024-06-25", "2024-08-01:2024-08-15"]
         },
     ]
     
@@ -80,7 +83,7 @@ def test_preference_agent():
         
         # Ingest into agent
         profile = agent.ingest_survey(
-            group_id,
+            trip_id,
             user_data["user_id"],
             SurveyInput(text=free_text, hard=hard, soft=scorecard)
         )
@@ -93,12 +96,12 @@ def test_preference_agent():
         print(f"  Profile Summary: {profile.summary[:100]}...")
         print(f"  Vector Dimension: {len(profile.vector)}")
     
-    print_section("AGGREGATING GROUP PREFERENCES")
+    print_section("AGGREGATING TRIP PREFERENCES")
     
-    # Aggregate preferences for the group
-    agg = agent.aggregate(group_id)
+    # Aggregate preferences for the trip
+    agg = agent.aggregate(trip_id)
     
-    print(f"\n📊 Group ID: {agg.group_id}")
+    print(f"\n📊 Trip ID: {agg.trip_id}")
     print(f"👥 Members: {len(agg.members)} - {agg.members}")
     print(f"📈 Coverage: {agg.coverage * 100:.0f}%")
     print(f"✅ Ready for Options: {agg.ready_for_options}")
@@ -124,14 +127,14 @@ def test_preference_agent():
     
     # Update Alice's preferences
     print("\n🔄 Updating user_alice's budget level from 3 to 4...")
-    delta = agent.update(group_id, "user_alice", {"hard.budget_level": "4"})
+    delta = agent.update(trip_id, "user_alice", {"hard.budget_level": "4"})
     
     print(f"  Changed fields:")
     for key, (old, new) in delta.changed.items():
         print(f"    • {key}: '{old}' → '{new}'")
     
     # Re-aggregate to see changes
-    agg_updated = agent.aggregate(group_id)
+    agg_updated = agent.aggregate(trip_id)
     print(f"\n📊 Updated Hard Constraints:")
     print(f"  • budget_level: {agg_updated.hard_union.get('budget_level', [])}")
     
@@ -147,12 +150,12 @@ def test_preference_agent():
     print(f"""
 ✅ Successfully tested:
    • Ingesting {len(test_users)} user preferences
-   • Aggregating group preferences
+   • Aggregating trip preferences
    • Conflict detection (budget level spread)
    • Preference updates
    
-📊 Final Group Stats:
-   • Group ID: {group_id}
+📊 Final Trip Stats:
+   • Trip ID: {trip_id}
    • Total Members: {len(agg_updated.members)}
    • Coverage: {agg_updated.coverage * 100:.0f}%
    • Ready: {agg_updated.ready_for_options}

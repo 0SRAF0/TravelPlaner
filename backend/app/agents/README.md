@@ -26,7 +26,7 @@ Multi-agent system using `LangGraph` for travel planning coordination.
 
 - Fetches preferences from database
 - Creates semantic embeddings (sentence-transformers)
-- Aggregates group preferences (vibes, budget, deal breakers)
+- Aggregates trip preferences (vibes, budget, deal breakers)
 - Detects conflicts
 - Provides semantic search for recommendations
 
@@ -53,7 +53,7 @@ Multi-agent system using `LangGraph` for travel planning coordination.
 **Role**: Reusable functions for agents  
 **Includes**:
 
-- `get_all_group_preferences()`: Fetch from database
+- `get_all_trip_preferences()`: Fetch from database
 
 ---
 
@@ -74,4 +74,6 @@ Next Agent ← ← ← ← ← ← ← ← ← ← ← ← ← ←
 2. Register in `orchestrator_agent.py` WORKERS dict
 3. Add routing logic
 4. Store output in `agent_data["{your_key}"]`
+
+
 

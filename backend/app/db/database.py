@@ -64,15 +64,15 @@ async def init_indexes():
         await users_collection.create_index("email")
 
         # Preferences indexes
-        # Unique preference per (group_id, user_id)
+        # Unique preference per (trip_id, user_id)
         await preferences_collection.create_index(
-            [("group_id", 1), ("user_id", 1)],
+            [("trip_id", 1), ("user_id", 1)],
             unique=True,
-            name="uniq_group_user"
+            name="uniq_trip_user"
         )
         # Helpful single-field indexes
         await preferences_collection.create_index("user_id")
-        await preferences_collection.create_index("group_id")
+        await preferences_collection.create_index("trip_id")
         
         print("✅ Database indexes created successfully")
     except Exception as e:
