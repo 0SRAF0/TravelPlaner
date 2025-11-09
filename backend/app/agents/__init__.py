@@ -20,10 +20,10 @@ __all__ = [
     'VectorIndex',
     'hash_embed',
     'cosine',
-    '_tokenize',
     'UserPreferenceProfile',
     'GroupPreferenceAggregate',
     'ScoredItem',
-    'PreferenceDelta'
+    'PreferenceDelta',
+    '_tokenize',
 ]
 

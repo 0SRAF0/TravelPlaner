@@ -120,7 +120,7 @@ async def google_auth(token_request: GoogleTokenRequest):
             email_verified=google_user.get("verified_email", False)
         )
         
-        # Step 4: Create or update user in MongoDB
+        # Step 4: Create or update user in MongoDB using User model
         users_collection = get_users_collection()
         
         # Check if user already exists
@@ -129,21 +129,23 @@ async def google_auth(token_request: GoogleTokenRequest):
         current_time = datetime.utcnow()
         
         if existing_user:
-            # Update existing user
+            # Update existing user using User model for validation
+            user_doc = User(
+                google_id=user_info.id,
+                email=user_info.email,
+                name=user_info.name,
+                given_name=user_info.given_name,
+                family_name=user_info.family_name,
+                picture=user_info.picture,
+                email_verified=user_info.email_verified,
+                created_at=existing_user.get("created_at", current_time),
+                updated_at=current_time,
+                last_login=current_time
+            )
+            
             update_result = await users_collection.update_one(
                 {"google_id": user_info.id},
-                {
-                    "$set": {
-                        "email": user_info.email,
-                        "name": user_info.name,
-                        "given_name": user_info.given_name,
-                        "family_name": user_info.family_name,
-                        "picture": user_info.picture,
-                        "email_verified": user_info.email_verified,
-                        "updated_at": current_time,
-                        "last_login": current_time
-                    }
-                }
+                {"$set": user_doc.model_dump(exclude={"created_at"})}
             )
             print("💾 DATABASE OPERATION:")
             print("="*50)
@@ -154,7 +156,7 @@ async def google_auth(token_request: GoogleTokenRequest):
             print(f"Name: {user_info.name}")
             print("="*50 + "\n")
         else:
-            # Create new user
+            # Create new user using User model
             user_doc = User(
                 google_id=user_info.id,
                 email=user_info.email,
