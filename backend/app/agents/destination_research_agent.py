@@ -121,7 +121,6 @@ Rules:
 - Prefer 15-30 items unless max_items is specified; keep diverse categories.
 - rough_cost is per-person baseline integer in default project currency; null if unknown.
 - duration_min integer or null.
-- lat/lng can be null if unknown; do not invent specific coordinates.
 - fits should list member ids who would likely enjoy the activity. If only group vibes available, include all members for top tags.
 - score must be 0..1; rank by score desc; tie-break by name asc.
 - rationale: short phrase explaining the fit (vibes/budget/diversity).
