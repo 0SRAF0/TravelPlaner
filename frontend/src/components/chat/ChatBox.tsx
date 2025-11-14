@@ -66,6 +66,21 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     }
   };
 
+  const escapeHtml = (text: string) =>
+    text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+  const formatMessage = (text: string) => {
+    const escaped = escapeHtml(text);
+    return escaped
+      .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/gs, '<em>$1</em>')
+      .replace(/`(.+?)`/gs, '<code>$1</code>')
+      .replace(/\n/g, '<br />');
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -112,13 +127,16 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 ${
+              className={`max-w-[80%] rounded-lg px-4 py-2 text-left ${
                 message.role === 'user'
                   ? 'bg-blue-500 text-white'
                   : 'bg-white text-gray-800 border border-gray-200'
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <p
+                className="text-sm whitespace-pre-wrap text-left leading-relaxed space-y-1"
+                dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+              />
             </div>
           </div>
         ))}
