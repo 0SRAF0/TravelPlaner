@@ -18,8 +18,8 @@ services:
     working_dir: /app
     command: >
       uvicorn app.main:app
-      --host ${SERVER_HOST}
-      --port ${SERVER_PORT}
+      --host 0.0.0.0
+      --port 8060
       --reload
     restart: unless-stopped
 

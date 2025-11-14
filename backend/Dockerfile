@@ -28,8 +28,6 @@ ARG PIP_REQUIREMENTS=requirements.txt
 
 # Copy requirements
 COPY requirements.txt .
-# If present, also copy a dev set to allow lighter images during development
-COPY requirements-dev.txt requirements-dev.txt
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
