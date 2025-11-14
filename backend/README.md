@@ -37,7 +37,7 @@ docker compose up -d --build
 ```
 - API will be at `http://localhost:8060`
 - MongoDB will listen on `localhost:27017` with default user `root`/`example`
-- The API container uses `MONGODB_URI=mongodb://root:example@mongo:27017/travel_planer?authSource=admin`
+- The API container uses `MONGODB_URI=mongodb://root:example@mongo:27017/travel_planner?authSource=admin`
 
 Stop and remove containers:
 ```bash
@@ -47,14 +47,14 @@ docker compose down
 #### Build and run the API container only
 From the project root:
 ```bash
-docker build -t travelplaner-api ./backend
+docker build -t travelplanner-api ./backend
 docker run --rm -p 8060:8060 \
   -e ENVIRONMENT=production \
   -e SERVER_PORT=8060 \
   -e CORS_ORIGINS="http://localhost:3060,http://127.0.0.1:3060" \
-  -e MONGODB_URI="mongodb://root:example@localhost:27017/travel_planer?authSource=admin" \
+  -e MONGODB_URI="mongodb://root:example@localhost:27017/travel_planner?authSource=admin" \
   -e JWT_SECRET="dev-secret-change-me" \
-  travelplaner-api
+  travelplanner-api
 ```
 
 #### Required environment variables

@@ -15,5 +15,5 @@ def root():
 @router.get("/health", response_model=APIResponse)
 def health_check():
     return APIResponse(
-        code=0, msg="ok", data={"status": "healthy", "service": "travel_planer-server"}
+        code=0, msg="ok", data={"status": "healthy", "service": "travel_planner-server"}
     )
