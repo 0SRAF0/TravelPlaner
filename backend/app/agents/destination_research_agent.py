@@ -207,7 +207,7 @@ class DestinationResearchAgent:
             resp = requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": dest, "format": "json", "limit": 1},
-                headers={"User-Agent": "TravelPlaner/1.0 (+CMPE272)"},
+                headers={"User-Agent": "TravelPlanner/1.0 (+CMPE272)"},
                 timeout=5,
             )
             if resp.ok:
@@ -239,7 +239,7 @@ class DestinationResearchAgent:
             resp = requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": query, "format": "json", "limit": 1},
-                headers={"User-Agent": "TravelPlaner/1.0 (+CMPE272)"},
+                headers={"User-Agent": "TravelPlanner/1.0 (+CMPE272)"},
                 timeout=5,
             )
             if resp.ok:

@@ -88,7 +88,7 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3060,http://127.
 
 # === Database Configuration ===
 MONGODB_URI = os.environ.get("MONGODB_URI")
-DATABASE_NAME = os.environ.get("DATABASE_NAME", "travel_planer")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "travel_planner")
 
 # === Google OAuth Configuration ===
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
@@ -117,8 +117,8 @@ GOOGLE_AI_MODEL = "gemini-2.5-flash"
 # LangChain/LangSmith
 LANGCHAIN_API_KEY = os.environ.get("LANGCHAIN_API_KEY")
 LANGCHAIN_TRACING_V2 = os.environ.get("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-LANGCHAIN_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "travel-planer")
+LANGCHAIN_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "travel-planner")
 
 # === Application Settings ===
-APP_NAME = "Travel Planer API"
+APP_NAME = "Travel Planner API"
 APP_VERSION = "1.0.0"
