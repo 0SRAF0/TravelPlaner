@@ -124,7 +124,7 @@ object BuildApi : BuildType({
             name = "Create .env.prod"
             id = "Create_env_prod"
             commands = """
-                cd %project_route%/backend
+                cd %server-project-route%/backend
                 cat <<'EOF' > .env.prod
                 %env.api%
                 EOF
