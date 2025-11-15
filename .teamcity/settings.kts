@@ -40,42 +40,11 @@ project {
     buildType(BuildApi)
 
     params {
-        param("server-project-route", "/home/vpcuser/TravelPlaner")
         param("server-address", "travelplanner.solutions")
-        param("env.web", """
-            ENVIRONMENT=deployment
-            
-            # Sys
-            VITE_APP_API_BASE_URL=http://travelplanner.solutions:8060
-            
-            # Google Map
-            VITE_GOOGLE_MAPS_API_KEY=AIzaSyDmyZ_sJw5q1fGztTGUbjcHQcrGPeccOa4
-        """.trimIndent())
+        param("server-project-route", "/home/vpcuser/TravelPlaner")
+        password("env.web", "credentialsJSON:a0f500c5-b36e-49ca-957f-14ab39bd9e69")
         param("server-username", "vpcuser")
-        param("env.api", """
-            ENVIRONMENT=deployment
-            
-            # Sys
-            SERVER_HOST=travelplanner.solutions
-            SERVER_PORT=8060
-            CORS_ORIGINS=http://travelplanner.solutions:3060
-            
-            # Google OAuth
-            GOOGLE_CLIENT_ID=1058642267983-5ejpivgliqclab7afnq57eom20qgem63.apps.googleusercontent.com
-            GOOGLE_CLIENT_SECRET=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
-            GOOGLE_REDIRECT_URI=http://travelplanner.solutions:3060/auth/callback
-            
-            # Google AI
-            GOOGLE_AI_API_KEY=AIzaSyDwixr4ZrCqAm0GDY141mrrHotL60XJfvQ
-            
-            # JWT
-            JWT_SECRET=Frrli_WYdq-FahOQrk9Zei6INVzfnjJObJuoCmSBEgA
-            JWT_ALGORITHM=HS256
-            JWT_EXPIRATION_HOURS=24
-            
-            # MongoDB
-            MONGODB_URI=mongodb+srv://root:mRaGrBX18gI8Osmj@travelplanner.70jvxlw.mongodb.net/?appName=TravelPlanner
-        """.trimIndent())
+        password("env.api", "credentialsJSON:8920a480-dbd6-41e3-bc10-f54fb7c56fa2")
     }
 
     features {
@@ -202,7 +171,7 @@ object BuildWeb : BuildType({
             name = "Create .env.prod"
             id = "Create_env_prod"
             commands = """
-                cd %project_route%/backend
+                cd %server-project-route%/backend
                 cat <<'EOF' > .env.prod
                 %env.web%
                 EOF
