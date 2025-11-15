@@ -51,7 +51,7 @@ project {
             # Google Map
             VITE_GOOGLE_MAPS_API_KEY=AIzaSyDmyZ_sJw5q1fGztTGUbjcHQcrGPeccOa4
         """.trimIndent())
-        param("server-username", "")
+        param("server-username", "vpcuser")
         param("env.api", """
             ENVIRONMENT=deployment
             
