@@ -178,12 +178,12 @@ object BuildWeb : BuildType({
             name = "Clear Legacy Deployment"
             id = "Clear_Legacy_Deployment"
             commands = """
-                cd %project_route%
+                cd %server-project-route%
                 rm -rf frontend
             """.trimIndent()
             targetUrl = "%server-address%:%server-project-route%/frontend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
