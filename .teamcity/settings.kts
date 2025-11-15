@@ -100,12 +100,12 @@ object BuildApi : BuildType({
             name = "Clear Legacy Deployment"
             id = "Clear_Legacy_Deployment"
             commands = """
-                cd %project_route%
+                cd %server-project-route%
                 rm -rf backend
             """.trimIndent()
             targetUrl = "%server-address%:%server-project-route%/backend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
