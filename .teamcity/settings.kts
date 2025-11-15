@@ -40,7 +40,7 @@ project {
     buildType(BuildApi)
 
     params {
-        param("project-route", "/home/vpcuser/TravelPlaner")
+        param("server-project-route", "/home/vpcuser/TravelPlaner")
         param("env.web", """
             ENVIRONMENT=deployment
             
