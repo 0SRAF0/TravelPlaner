@@ -169,18 +169,6 @@ object BuildApi : BuildType({
 object BuildWeb : BuildType({
     name = "Build-Web"
 
-    params {
-        param("env.prod", """
-            ENVIRONMENT=deployment
-            
-            # Sys
-            VITE_APP_API_BASE_URL=http://travelplanner.solutions:8060
-            
-            # Google Map
-            VITE_GOOGLE_MAPS_API_KEY=AIzaSyDmyZ_sJw5q1fGztTGUbjcHQcrGPeccOa4
-        """.trimIndent())
-    }
-
     vcs {
         root(GitGithubCom0sraf0TravelPlannerGitRefsHeadsMain1)
     }
