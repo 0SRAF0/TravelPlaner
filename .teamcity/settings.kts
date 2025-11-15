@@ -204,12 +204,12 @@ object BuildWeb : BuildType({
             commands = """
                 cd %project_route%/backend
                 cat <<'EOF' > .env.prod
-                %env.prod%
+                %env.web%
                 EOF
             """.trimIndent()
             targetUrl = "%server-address%:%server-project-route%/frontend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
