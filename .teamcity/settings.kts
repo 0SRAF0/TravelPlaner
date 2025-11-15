@@ -40,6 +40,7 @@ project {
     buildType(BuildApi)
 
     params {
+        param("env.web", "")
         param("server-domain-name", "travelplanner.solutions")
         param("server-dir-route", "/home/vpcuser/TravelPlaner")
         param("env.api", """
