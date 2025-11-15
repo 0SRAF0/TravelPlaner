@@ -3,7 +3,7 @@ services:
   web:
     container_name: web
     env_file:
-      - .env.dev
+      - .env.prod
     build:
       context: .
       dockerfile: Dockerfile
