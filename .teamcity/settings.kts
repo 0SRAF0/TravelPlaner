@@ -41,6 +41,7 @@ project {
 
     params {
         param("server-project-route", "/home/vpcuser/TravelPlaner")
+        param("server-address", "travelplanner.solutions")
         param("env.web", """
             ENVIRONMENT=deployment
             
@@ -75,7 +76,6 @@ project {
             # MongoDB
             MONGODB_URI=mongodb+srv://root:mRaGrBX18gI8Osmj@travelplanner.70jvxlw.mongodb.net/?appName=TravelPlanner
         """.trimIndent())
-        param("server-domain-name", "travelplanner.solutions")
     }
 
     features {
