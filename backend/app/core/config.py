@@ -13,9 +13,15 @@ def _load_env_files() -> None:
 	Note: Existing OS environment variables are never overridden.
 	"""
 	# 1) Base .env
-	base_path = find_dotenv(".env", usecwd=True)
-	if base_path:
-		load_dotenv(base_path, override=False)
+	# Explicitly look for .env in the backend directory
+	backend_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env")
+	if os.path.exists(backend_env_path):
+		load_dotenv(backend_env_path, override=False)
+	else:
+		# Fallback to default behavior if not found in backend
+		base_path = find_dotenv(".env", usecwd=True)
+		if base_path:
+			load_dotenv(base_path, override=False)
 
 	# 2) Explicit file via ENV_FILE
 	explicit = os.environ.get("ENV_FILE")
