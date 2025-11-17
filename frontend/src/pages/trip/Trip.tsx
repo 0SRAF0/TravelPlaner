@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import Notification from '../../components/notification/Notification';
+import { API } from '../../services/api';
 
 interface Member {
   user_id: string;
@@ -24,7 +25,7 @@ interface TripData {
   creator_id: string;
 }
 
-export default function TripDetail() {
+export default function Trip() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
   const [trip, setTrip] = useState<TripData | null>(null);
@@ -55,7 +56,9 @@ export default function TripDetail() {
     setError(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/${tripId}`);
+      const url = new URL(API.trip.get);
+      url.searchParams.set('trip_id', String(tripId));
+      const response = await fetch(url.toString());
       const result = await response.json();
 
       if (result.code === 0 && result.data) {
@@ -71,7 +74,7 @@ export default function TripDetail() {
   };
 
   const handleSetPreferences = () => {
-    navigate(`/trip/${tripId}/preferences`);
+    navigate(`/trip/preferences/${tripId}`);
   };
 
   const handleCopyCode = () => {
@@ -97,15 +100,17 @@ export default function TripDetail() {
 
     setProcessingAllIn(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/${tripId}/all-in`, {
+      const response = await fetch(API.trip.allIn, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trip_id: tripId }),
       });
 
       const result = await response.json();
 
       if (result.code === 0) {
         // Navigate to chat immediately - orchestrator runs in background
-        navigate(`/trip/${tripId}/chat`);
+        navigate(`/trip/chat/${tripId}`);
       } else {
         // Show error
         setToast({
@@ -151,7 +156,7 @@ export default function TripDetail() {
   const canTriggerAllIn = trip.members_with_preferences.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">

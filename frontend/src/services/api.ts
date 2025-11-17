@@ -28,15 +28,37 @@ export const API = {
     status: `${BASE_URL}/status`,
   },
 
+  // Chatbot endpoints
+  chatBot: {
+    send: `${BASE_URL}/chatbot`,
+  },
+
+  // Trip endpoints
+  trip: {
+    create: `${BASE_URL}/trips`,
+    join: `${BASE_URL}/trips/join`,
+    get: `${BASE_URL}/trips`,
+    user:`${BASE_URL}/trips/user`,
+    allIn: `${BASE_URL}/trips/all-in`,
+    delete: `${BASE_URL}/trips`,
+  },
+
+  // Preferences endpoints
+  preferences: {
+    create: `${BASE_URL}/preferences/`, // POST
+    aggregate: `${BASE_URL}/preferences/aggregate`, // GET ?trip_id=
+    user: `${BASE_URL}/preferences/user`, // GET ?user_id=&trip_id=
+  },
+
   // Activities endpoints
   activities: {
     list: `${BASE_URL}/activities`,
     vote: `${BASE_URL}/activities/vote`,
   },
 
-  // Chatbot endpoints
-  chatBot: {
-    send: `${BASE_URL}/chatbot`,
+  // Locations endpoints
+  locations: {
+    autocomplete: `${BASE_URL}/locations/autocomplete`,
   },
 
   // Chat endpoints (WebSocket)

@@ -5,7 +5,7 @@ import { SignIn } from './pages/signIn/SignIn.tsx';
 import Dashboard from './pages/dashboard/dashboard.tsx';
 import { GoogleOAuthCallback } from './pages/signIn/components/GoogleOAuthCallback.tsx';
 import { Home } from './pages/home/home.tsx';
-import TripDetail from './pages/trip/TripDetail.tsx';
+import Trip from './pages/trip/Trip.tsx';
 import PreferenceForm from './pages/preferences/PreferenceForm.tsx';
 import { Chat } from './pages/chat/Chat.tsx';
 import { authService } from './services/authService.ts';
@@ -73,23 +73,23 @@ function App() {
             path="/trip/:tripId"
             element={
               <ProtectedRoute>
-                <TripDetail />
+                <Trip />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/trip/:tripId/preferences"
+            path="/trip/preferences/:tripId"
             element={
               <ProtectedRoute>
                 <PreferenceForm
-                  tripId={window.location.pathname.split('/')[2]}
+                  tripId={window.location.pathname.split('/')[3]}
                   userId={JSON.parse(localStorage.getItem('user_info') || '{}').id}
                 />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/trip/:tripId/chat"
+            path="/trip/chat/:tripId"
             element={
               <ProtectedRoute>
                 <Chat />
