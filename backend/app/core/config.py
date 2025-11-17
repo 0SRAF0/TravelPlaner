@@ -87,7 +87,10 @@ SERVER_PORT = _get_int_env("SERVER_PORT", 8060)
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 
 # === CORS Configuration ===
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS").split(",")
+# Allow configuring CORS origins via environment variable `CORS_ORIGINS` (comma-separated).
+# Provide a safe default for local development including the frontend dev port(s).
+_cors_env = os.environ.get("CORS_ORIGINS", "http://localhost:3060,http://127.0.0.1:3060,http://localhost:3000")
+CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
 # Example: "http://localhost:3060,http://127.0.0.1:3060,http://localhost:3000,https://yourdomain.com"
 
 # === Database Configuration ===
@@ -105,6 +108,8 @@ GOOGLE_TOKEN_URL = os.environ.get(
 GOOGLE_USERINFO_URL = os.environ.get(
     "GOOGLE_USERINFO_URL", "https://www.googleapis.com/oauth2/v2/userinfo"
 )
+# Google Maps API (for location autocomplete)
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
 # === JWT Configuration ===
 JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-this-in-production")
