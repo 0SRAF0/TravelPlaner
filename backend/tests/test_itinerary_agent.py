@@ -76,8 +76,13 @@ def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> Dict[str, Any]:
     # Patch ChatGoogleGenerativeAI where it's imported in itinerary_agent.py
     # and also patch the API key to ensure the agent initializes correctly.
     with (
-        patch("app.agents.itinerary_agent.ChatGoogleGenerativeAI", return_value=mock_llm_instance),
-        patch("app.core.config.GOOGLE_AI_API_KEY", "mock_api_key"),
+        patch(
+            "app.agents.itinerary_agent.ChatGoogleGenerativeAI",
+            return_value=mock_llm_instance,
+        ),
+        # Patch the imported name inside itinerary_agent since it uses:
+        # from app.core.config import GOOGLE_AI_API_KEY
+        patch("app.agents.itinerary_agent.GOOGLE_AI_API_KEY", "mock_api_key"),
     ):
         agent = ItineraryAgent()
 
@@ -113,9 +118,21 @@ def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> Dict[str, Any]:
                 "end_date": end_date,
                 "duration_days": duration_days,
                 "activity_catalog": [
-                    {"activity_id": "act_001", "name": "Louvre Museum", "category": "Culture"},
-                    {"activity_id": "act_002", "name": "Eiffel Tower", "category": "Culture"},
-                    {"activity_id": "act_003", "name": "Bistro Paul", "category": "Food"},
+                    {
+                        "activity_id": "act_001",
+                        "name": "Louvre Museum",
+                        "category": "Culture",
+                    },
+                    {
+                        "activity_id": "act_002",
+                        "name": "Eiffel Tower",
+                        "category": "Culture",
+                    },
+                    {
+                        "activity_id": "act_003",
+                        "name": "Bistro Paul",
+                        "category": "Food",
+                    },
                 ],
             },
         }

@@ -15,7 +15,7 @@ from app.agents.destination_research_agent import Activity, PreferencesSummaryIn
 from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
 
 
-AGENT_LABEL = "itinerary_generation"
+AGENT_LABEL = "itinerary"
 
 
 # ====== Models ======
