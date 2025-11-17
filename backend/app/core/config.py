@@ -80,6 +80,7 @@ def _get_int_env(var_name: str, default_value: int) -> int:
 SERVER_PORT = _get_int_env("SERVER_PORT", 8060)
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 
+
 # === CORS Configuration ===
 def _get_cors_origins() -> list[str]:
     """

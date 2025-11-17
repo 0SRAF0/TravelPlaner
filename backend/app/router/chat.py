@@ -32,7 +32,7 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)):
     """
     Chat endpoint for AI travel planning assistant.
-    
+
     Uses Google Gemini to provide conversational assistance for travel planning.
     """
     if not GOOGLE_AI_API_KEY:
@@ -45,7 +45,9 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY)
+        llm = ChatGoogleGenerativeAI(
+            model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
+        )
 
         # Build conversation context
         system_prompt = """You are a helpful AI travel planning assistant for a group travel planning application. 
@@ -60,7 +62,7 @@ Keep your responses conversational and helpful. If you don't know something, adm
 
         # Format conversation history using LangChain message types
         messages = [SystemMessage(content=system_prompt)]
-        
+
         # Add history (limit to last 10 messages to avoid token limits)
         recent_history = request.history[-10:] if len(request.history) > 10 else request.history
         for msg in recent_history:
@@ -71,7 +73,7 @@ Keep your responses conversational and helpful. If you don't know something, adm
                     messages.append(HumanMessage(content=content))
                 elif role == "assistant":
                     messages.append(AIMessage(content=content))
-        
+
         # Add current message
         messages.append(HumanMessage(content=request.message))
 
@@ -95,4 +97,3 @@ Keep your responses conversational and helpful. If you don't know something, adm
             status_code=500,
             detail=f"Failed to process chat message: {str(e)}",
         )
-
