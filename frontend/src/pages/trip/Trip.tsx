@@ -4,6 +4,7 @@ import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import Notification from '../../components/notification/Notification';
 import { API } from '../../services/api';
+import ConfirmProceedModal from './components/ConfirmProceedModal.tsx';
 
 interface Member {
   user_id: string;
@@ -36,6 +37,8 @@ export default function Trip() {
     type?: 'success' | 'error' | 'warning';
   } | null>(null);
   const [processingAllIn, setProcessingAllIn] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingMembers, setPendingMembers] = useState<{ name: string; picture?: string }[]>([]);
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
   const hasSubmitted = trip?.members_with_preferences.includes(currentUser.id) || false;
@@ -84,20 +87,7 @@ export default function Trip() {
     }
   };
 
-  const handleAllIn = async () => {
-    if (!trip) return;
-
-    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
-
-    if (notSubmitted.length > 0) {
-      const names = notSubmitted.map((m) => m.name).join(', ');
-      const confirmed = window.confirm(
-        `Not everyone has submitted preferences yet:\n\n${names}\n\nProceed anyway? The AI will work with available preferences.`,
-      );
-
-      if (!confirmed) return;
-    }
-
+  const startAllIn = async () => {
     setProcessingAllIn(true);
     try {
       const response = await fetch(API.trip.allIn, {
@@ -109,10 +99,8 @@ export default function Trip() {
       const result = await response.json();
 
       if (result.code === 0) {
-        // Navigate to chat immediately - orchestrator runs in background
         navigate(`/trip/chat/${tripId}`);
       } else {
-        // Show error
         setToast({
           message: result.msg || 'Failed to start planning',
           type: 'error',
@@ -126,6 +114,20 @@ export default function Trip() {
     } finally {
       setProcessingAllIn(false);
     }
+  };
+
+  const handleAllIn = async () => {
+    if (!trip) return;
+
+    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
+
+    if (notSubmitted.length > 0) {
+      setPendingMembers(notSubmitted.map((m) => ({ name: m.name, picture: m.picture })));
+      setShowConfirm(true);
+      return;
+    }
+
+    await startAllIn();
   };
   if (loading) {
     return (
@@ -243,11 +245,13 @@ export default function Trip() {
                       : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                <Button
-                  text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
-                  onClick={handleAllIn}
-                  size="lg"
-                />
+                {trip.status !== 'planning' && (
+                  <Button
+                    text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
+                    onClick={handleAllIn}
+                    size="lg"
+                  />
+                )}
               </div>
             </div>
           )}
@@ -273,6 +277,16 @@ export default function Trip() {
         message={toast?.message || ''}
         type={toast?.type}
         onClose={() => setToast(null)}
+      />
+      <ConfirmProceedModal
+        isOpen={showConfirm}
+        pendingMembers={pendingMembers}
+        isProcessing={processingAllIn}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={async () => {
+          setShowConfirm(false);
+          await startAllIn();
+        }}
       />
     </div>
   );

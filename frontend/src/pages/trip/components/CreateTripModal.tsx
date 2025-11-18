@@ -72,8 +72,6 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Create New Trip</h2>
 
-        
-
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Trip Name *</label>
