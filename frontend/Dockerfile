@@ -7,7 +7,8 @@ WORKDIR /app
 # Install dependencies first (better layer caching)
 COPY package*.json ./
 # Support both presence and absence of package-lock.json
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Fallback to npm install if the lockfile is out of sync (developer convenience in dev builds)
+RUN if [ -f package-lock.json ]; then npm ci || npm install; else npm install; fi
 
 # Pass build-time API base URL (optional). Example:
 # docker build --build-arg VITE_APP_API_BASE_URL=http://localhost:8060 -t travelplanner-frontend .
