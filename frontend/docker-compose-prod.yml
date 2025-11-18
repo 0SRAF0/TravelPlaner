@@ -4,11 +4,14 @@ services:
     container_name: web
     env_file:
       - .env.prod
+    ports:
+      - '3060:80'
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
       args:
         VITE_APP_API_BASE_URL: ${VITE_APP_API_BASE_URL}
-    ports:
-      - '3060:80'
+        VITE_BUILD_MODE: prod
+    command: ["nginx", "-g", "daemon off;"]
     restart: unless-stopped

@@ -4,11 +4,14 @@ services:
     container_name: web
     env_file:
       - .env.dev
+    ports:
+      - '3060:80'
     build:
       context: .
       dockerfile: Dockerfile
+      target: builder
       args:
         VITE_APP_API_BASE_URL: ${VITE_APP_API_BASE_URL}
-    ports:
-      - '3060:80'
+        VITE_BUILD_MODE: dev
+    command: ["npm", "run", "dev", "--", "--mode", "dev", "--host", "0.0.0.0", "--port", "80"]
     restart: unless-stopped

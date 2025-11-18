@@ -15,9 +15,13 @@ RUN if [ -f package-lock.json ]; then npm ci || npm install; else npm install; f
 ARG VITE_APP_API_BASE_URL
 ENV VITE_APP_API_BASE_URL=${VITE_APP_API_BASE_URL}
 
+# Explicit Vite build mode (default: prod). Can be overridden via build args.
+ARG VITE_BUILD_MODE=prod
+ENV VITE_BUILD_MODE=${VITE_BUILD_MODE}
+
 # Copy the rest of the source and build
 COPY . .
-RUN npm run build
+RUN npm run build -- --mode ${VITE_BUILD_MODE}
 
 ## Runtime stage
 FROM nginx:alpine AS runtime
