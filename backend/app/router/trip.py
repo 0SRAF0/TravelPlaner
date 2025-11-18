@@ -201,6 +201,7 @@ async def run_orchestrator_background(
 class CreateTripRequest(BaseModel):
     trip_name: str = Field(..., description="Name for the trip")
     creator_id: str = Field(..., description="User ID of the creator")
+    destination: str = Field(..., description="Destination for the trip")
 
 
 class JoinTripRequest(BaseModel):
@@ -283,6 +284,7 @@ async def create_trip(body: CreateTripRequest):
             members=[body.creator_id],  # Creator automatically joins
             members_with_preferences=[],
             status="collecting_preferences",
+            destination=body.destination,
         )
 
         # Ensure trip_code is unique
@@ -308,6 +310,7 @@ async def create_trip(body: CreateTripRequest):
                 "trip_id": trip_id,
                 "trip_code": trip.trip_code,
                 "trip_name": trip.trip_name,
+                "destination": trip.destination,
                 "creator_id": body.creator_id,
                 "members": [body.creator_id],
             },
