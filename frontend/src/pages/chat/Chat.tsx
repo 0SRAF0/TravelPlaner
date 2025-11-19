@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
+import ActivityList from '../../components/activity/ActivityList';
 import { API } from '../../services/api';
 
 interface Message {
@@ -155,7 +156,7 @@ export function Chat() {
       case 'starting':
         return '⏳';
       case 'running':
-        return '⚙️';
+        return '🤖';
       case 'completed':
         return '✅';
       case 'error':
@@ -166,10 +167,10 @@ export function Chat() {
   };
 
   return (
-    <div className="min-h-screen py-8 px-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen py-8 px-4 bg-gray-50">
+      <div className="max-w-[1800px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Group Trip Chat</h1>
             <p className="text-sm text-gray-600">
@@ -183,48 +184,16 @@ export function Chat() {
           <Button text="Back to Trip" onClick={() => navigate(`/trip/${tripId}`)} />
         </div>
 
-        <div className="flex gap-4">
-          {/* Agent Status Sidebar */}
-          <div className="w-80 bg-white rounded-lg shadow-sm p-4 h-[600px] overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              🤖 AI Agent Status
-            </h2>
+        {/* Main Content - Split 50/50 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-180px)]">
+          {/* Left Half - Chat */}
+          <div className="flex flex-col bg-white rounded-xl shadow-sm">
+            <div className="p-4 border-b">
+              <h2 className="text-lg font-bold text-gray-900">Chat</h2>
+            </div>
 
-            {agentStatuses.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                <p className="text-sm">No active agents</p>
-                <p className="text-xs mt-2">Agents will appear here when working</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {agentStatuses.map((agent, idx) => (
-                  <div
-                    key={idx}
-                    className={`border-2 rounded-lg p-3 ${getStatusColor(agent.status)}`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">{getStatusIcon(agent.status)}</span>
-                      <span className="font-semibold text-sm">{agent.agent_name}</span>
-                    </div>
-                    <p className="text-xs font-medium mb-1">Status: {agent.status}</p>
-                    <p className="text-xs">{agent.step}</p>
-                    {agent.status === 'running' && (
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div className="bg-blue-600 h-1.5 rounded-full animate-pulse w-3/4"></div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Messages Container */}
-          <div className="flex-1 bg-white rounded-lg shadow-sm p-4 h-[600px] flex flex-col">
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
@@ -265,7 +234,7 @@ export function Chat() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t pt-4">
+            <div className="border-t p-4">
               <div className="flex gap-2">
                 <textarea
                   value={inputMessage}
@@ -281,6 +250,70 @@ export function Chat() {
               <p className="text-xs text-gray-500 mt-2">
                 💡 Tip: Type "leggo" in your message to trigger AI travel suggestions
               </p>
+            </div>
+          </div>
+
+          {/* Right Half - Activities (80%) + Agent Status (20%) */}
+          <div className="flex flex-col gap-4">
+            {/* Interactive Activities Area - 80% */}
+            <div className="flex-[4] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+              <div className="p-4 border-b">
+                <h2 className="text-lg font-bold text-gray-900">Suggested Activities</h2>
+                <p className="text-xs text-gray-600 mt-1">
+                  Vote on activities to build your itinerary
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {tripId ? (
+                  <ActivityList
+                    tripId={tripId}
+                    limit={20}
+                    cardWidthPx={320}
+                    cardHeightPx={240}
+                    modalMaxWidth="600px"
+                  />
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <p className="text-sm">No activities yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Agent Status Area - 20% */}
+            <div className="flex-[1] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+              <div className="p-4 border-b">
+                <h2 className="text-sm font-bold text-gray-900">AI Agent Status</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3">
+                {agentStatuses.length === 0 ? (
+                  <div className="text-center text-gray-500 py-4">
+                    <p className="text-xs">No active agents</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {agentStatuses.map((agent, idx) => (
+                      <div
+                        key={idx}
+                        className={`border-2 rounded-lg p-2 ${getStatusColor(agent.status)}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-base">{getStatusIcon(agent.status)}</span>
+                          <span className="font-semibold text-xs">{agent.agent_name}</span>
+                        </div>
+                        <p className="text-xs">{agent.step}</p>
+                        {agent.status === 'running' && (
+                          <div className="mt-1">
+                            <div className="w-full bg-gray-200 rounded-full h-1">
+                              <div className="bg-blue-600 h-1 rounded-full animate-pulse w-3/4"></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

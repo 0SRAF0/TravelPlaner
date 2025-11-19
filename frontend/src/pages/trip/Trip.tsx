@@ -234,18 +234,26 @@ export default function Trip() {
             ))}
           </div>
 
-          {/* All In Button */}
+          {/* All In Button / Go to Chat */}
           {canTriggerAllIn && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>
                   <p className="text-sm text-gray-600">
-                    {allSubmitted
-                      ? '🎉 Everyone has submitted! Ready to generate your itinerary.'
-                      : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
+                    {trip.status === 'planning'
+                      ? '🤖 AI is planning your trip! Check the chat to see progress.'
+                      : allSubmitted
+                        ? '🎉 Everyone has submitted! Ready to generate your itinerary.'
+                        : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                {trip.status !== 'planning' && (
+                {trip.status === 'planning' ? (
+                  <Button
+                    text="Go to Chat 💬"
+                    onClick={() => navigate(`/trip/chat/${tripId}`)}
+                    size="lg"
+                  />
+                ) : (
                   <Button
                     text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
                     onClick={handleAllIn}
@@ -256,20 +264,6 @@ export default function Trip() {
             </div>
           )}
         </div>
-
-        {/* Activities Section */}
-        {trip.status !== 'collecting_preferences' && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Suggested Activities</h2>
-            <ActivityList
-              tripId={trip.trip_id}
-              limit={20}
-              cardWidthPx={400}
-              cardHeightPx={280}
-              modalMaxWidth="600px"
-            />
-          </div>
-        )}
       </div>
 
       <Notification

@@ -77,7 +77,10 @@ def _needs_preference_processing(state: AgentState) -> bool:
     trip_id = state.get("trip_id")
     agent_data = state.get("agent_data", {}) or {}
     has_summary = agent_data.get("preferences_summary") is not None
-    return bool(trip_id) and not has_summary
+    result = bool(trip_id) and not has_summary
+    if result:
+        print(f"[orchestrator] Preference processing needed for trip {trip_id}")
+    return result
 
 
 def _needs_destination_research(state: AgentState) -> bool:
@@ -86,7 +89,10 @@ def _needs_destination_research(state: AgentState) -> bool:
     has_preferences = agent_data.get("preferences_summary") is not None
     has_catalog = agent_data.get("activity_catalog") is not None
     has_destination = bool(agent_data.get("destination"))
-    return has_preferences and has_destination and not has_catalog
+    result = has_preferences and has_destination and not has_catalog
+    if result:
+        print(f"[orchestrator] Destination research needed for {agent_data.get('destination')}")
+    return result
 
 
 def _needs_itinerary_generation(state: AgentState) -> bool:
@@ -95,7 +101,10 @@ def _needs_itinerary_generation(state: AgentState) -> bool:
     has_catalog = agent_data.get("activity_catalog") is not None
     has_itinerary = agent_data.get("itinerary") is not None
     trip_duration_days = agent_data.get("trip_duration_days") or state.get("trip_duration_days")
-    return has_catalog and bool(trip_duration_days) and not has_itinerary
+    result = has_catalog and bool(trip_duration_days) and not has_itinerary
+    if result:
+        print(f"[orchestrator] Itinerary generation needed for {trip_duration_days} days")
+    return result
 
 
 def supervisor_agent(state: AgentState) -> AgentState:

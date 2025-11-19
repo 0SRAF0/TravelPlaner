@@ -27,6 +27,7 @@ async def run_orchestrator_background(
     """
     Run the orchestrator agent in the background and broadcast updates to chat.
     """
+    print(f"[orchestrator_background] Starting for trip_id={trip_id}, destination={destination}, duration={trip_duration_days}")
     from app.agents.orchestrator_agent import run_orchestrator_agent
 
     db = get_database()
@@ -35,6 +36,7 @@ async def run_orchestrator_background(
     # Helper function to broadcast agent status
     async def broadcast_agent_status(agent_name: str, status: str, step: str):
         from app.router.chat import broadcast_to_chat
+        print(f"[agent_status] {agent_name} - {status}: {step}")
 
         await broadcast_to_chat(
             trip_id,
@@ -201,7 +203,7 @@ async def run_orchestrator_background(
 class CreateTripRequest(BaseModel):
     trip_name: str = Field(..., description="Name for the trip")
     creator_id: str = Field(..., description="User ID of the creator")
-    destination: str = Field(..., description="Destination for the trip")
+    destination: str | None = Field(None, description="Destination for the trip (optional)")
 
 
 class JoinTripRequest(BaseModel):
@@ -273,6 +275,7 @@ async def create_trip(body: CreateTripRequest):
     Create a new trip and generate a unique trip code.
     Creator is automatically added to members list.
     """
+    print(f"[create_trip] Request: name={body.trip_name}, creator={body.creator_id}, dest={body.destination}")
     try:
         db = get_database()
         trips_collection = db.trips
@@ -460,6 +463,7 @@ async def trigger_all_in(body: AllInTripRequest):
     Trigger the 'All In' workflow - aggregates preferences and starts orchestrator in background.
     Returns immediately so users can navigate to chat.
     """
+    print(f"[all_in] Triggering for trip_id={body.trip_id}")
     import asyncio
 
     try:
@@ -496,6 +500,7 @@ async def trigger_all_in(body: AllInTripRequest):
         # Aggregate preferences
         prefs_collection = get_preferences_collection()
         all_prefs = await prefs_collection.find({"trip_id": trip_id_str}).to_list(length=None)
+        print(f"[all_in] Found {len(all_prefs)} preferences for trip {trip_id_str}")
 
         # Find overlapping dates and calculate duration
         # For now, we'll find the most common date range or use the first available
@@ -530,7 +535,20 @@ async def trigger_all_in(body: AllInTripRequest):
         else:
             trip_duration_days = 7  # Default if no dates provided
 
-        destination = trip_doc.get("destination")
+        # Aggregate destination from preferences (take the most common one)
+        all_destinations = []
+        for p in all_prefs:
+            if p.get("destination"):
+                all_destinations.append(p.get("destination").strip())
+        
+        destination = None
+        if all_destinations:
+            dest_counter = Counter(all_destinations)
+            destination = dest_counter.most_common(1)[0][0] if dest_counter else all_destinations[0]
+        
+        # Fallback to trip's destination if no preferences have it
+        if not destination:
+            destination = trip_doc.get("destination")
 
         # Update trip with aggregated values
         await trips_collection.update_one(
@@ -547,12 +565,14 @@ async def trigger_all_in(body: AllInTripRequest):
         )
 
         print(f"[all_in] Starting orchestrator for trip {trip_id_str}")
-        print(f"  Destination: {destination}")
-        print(f"  Duration: {trip_duration_days} days")
-        print(f"  Selected dates: {selected_dates}")
-        print(f"  Members with preferences: {len(members_with_prefs)}/{len(members)}")
+        print(f"[all_in]   Destination: {destination}")
+        print(f"[all_in]   Duration: {trip_duration_days} days")
+        print(f"[all_in]   Selected dates: {selected_dates}")
+        print(f"[all_in]   Members: {len(members_with_prefs)}/{len(members)} submitted preferences")
 
         # Preference ingestion and aggregation, plus optional destination research
+        '''
+        Orchestrator does this already so commenting it out. 
         try:
             agent = PreferenceAgent()
             ingested_count = 0
@@ -706,6 +726,7 @@ async def trigger_all_in(body: AllInTripRequest):
         except Exception as e:
             # Do not fail the all-in call if the research step fails; just log it.
             print(f"[all_in] Warning: preference aggregation or research failed: {e}")
+            '''
 
         # Start orchestrator in background
         asyncio.create_task(

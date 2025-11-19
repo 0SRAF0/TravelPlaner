@@ -25,10 +25,6 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
       setError('Please enter a trip name');
       return;
     }
-    if (!destination.trim()) {
-      setError('Please enter a destination');
-      return;
-    }
 
     setLoading(true);
     setError(null);
@@ -42,9 +38,9 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          trip_name: tripName,
+          trip_name: tripName.trim(),
           creator_id: user.id,
-          destination: destination.trim(),
+          destination: null,
         }),
       });
 
@@ -76,60 +72,55 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
 
   return (
     <>
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Create New Trip</h2>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <div className="space-y-8 px-2 py-4">
+          {/* Header - Centered */}
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Create New Trip</h2>
+            <p className="text-gray-600">Start planning your next adventure</p>
+          </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-700 font-bold mb-2">Trip Name *</label>
-            <Input
-              type="text"
-              placeholder="e.g., Summer Japan Trip"
-              value={tripName}
-              onChange={(e) => setTripName(e.target.value)}
+          {/* Form - More spacing */}
+          <div className="space-y-6 py-4">
+            <div>
+              <label className="block text-sm text-gray-700 font-semibold mb-3">Trip Name *</label>
+              <Input
+                type="text"
+                placeholder="e.g., Summer Japan Trip"
+                value={tripName}
+                onChange={(e) => setTripName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Buttons - Better hierarchy and spacing */}
+          <div className="flex flex-col gap-3 pt-4">
+            <div className="w-full">
+              <Button
+                text={loading ? 'Creating...' : 'Create Trip'}
+                onClick={handleSubmit}
+                size="lg"
+                disabled={loading}
+              />
+            </div>
+            <button
+              onClick={onClose}
               disabled={loading}
-            />
+              className="w-full px-4 py-2.5 text-sm text-gray-600 bg-transparent hover:bg-gray-50 rounded-xl disabled:opacity-50 font-medium transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Where do you want to go?
-            </label>
-            <LocationAutocomplete
-              value={destination}
-              onChange={setDestination}
-              placeholder="e.g., Tokyo, Japan"
-            />
-            <p className="text-sm text-gray-600 mt-2">Start typing to see real location suggestions</p>
-          </div>
-          <p className="text-sm text-gray-600">
-            You'll set your travel preferences on the next step.
-          </p>
         </div>
+      </Modal>
 
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-50 font-medium"
-          >
-            Cancel
-          </button>
-          <Button
-            text={loading ? 'Creating...' : 'Create Trip'}
-            onClick={handleSubmit}
-            size="base"
-          />
-        </div>
-      </div>
-    </Modal>
-
-    <Notification
-      isVisible={!!error}
-      message={error || ''}
-      type="error"
-      onClose={() => setError(null)}
-    />
+      <Notification
+        isVisible={!!error}
+        message={error || ''}
+        type="error"
+        onClose={() => setError(null)}
+      />
     </>
   );
 }

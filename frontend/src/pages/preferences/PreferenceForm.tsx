@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import Notification from '../../components/notification/Notification';
+import LocationAutocomplete from '../../components/input/LocationAutocomplete';
 import { API } from '../../services/api';
 
 interface PreferenceFormProps {
@@ -48,6 +49,7 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
       // As a last resort return undefined (handled by validations)
       return undefined as unknown as string;
     })();
+  const [destination, setDestination] = useState('');
   const [budgetLevel, setBudgetLevel] = useState<number>(2);
   const [selectedVibes, setSelectedVibes] = useState<Vibe[]>([]);
   const [dealBreaker, setDealBreaker] = useState('');
@@ -64,20 +66,37 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
   const toggleVibe = (vibe: Vibe) => {
     if (selectedVibes.includes(vibe)) {
       setSelectedVibes(selectedVibes.filter((v) => v !== vibe));
-    } else if (selectedVibes.length < 6) {
+    } else if (selectedVibes.length < 3) {
       setSelectedVibes([...selectedVibes, vibe]);
     } else {
-      setToast({ message: 'Maximum 6 vibes allowed', type: 'warning' });
+      setToast({ message: 'Maximum 3 vibes allowed', type: 'warning' });
     }
   };
 
   const handleSubmit = async () => {
+    console.log(
+      '[PreferenceForm] Submitting preferences for trip:',
+      effectiveTripId,
+      'user:',
+      effectiveUserId,
+    );
     // Validate presence of required IDs before sending
     if (!effectiveTripId || !effectiveUserId) {
+      console.error('[PreferenceForm] Missing required IDs');
       setToast({
         message: 'Missing trip or user id. Please sign in and open the trip again.',
         type: 'error',
       });
+      return;
+    }
+
+    if (!destination.trim()) {
+      setToast({ message: 'Please enter a destination', type: 'warning' });
+      return;
+    }
+
+    if (availableDates.length === 0) {
+      setToast({ message: 'Please add at least one date range', type: 'warning' });
       return;
     }
 
@@ -96,6 +115,7 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         body: JSON.stringify({
           trip_id: effectiveTripId,
           user_id: effectiveUserId,
+          destination: destination.trim(),
           available_dates: availableDates.map((d) => `${d.start}:${d.end}`),
           budget_level: budgetLevel,
           vibes: selectedVibes.map((v) => String(v)),
@@ -107,12 +127,14 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
       const result = await response.json();
 
       if (result.code === 0) {
+        console.log('[PreferenceForm] Preferences saved successfully');
         setToast({
           message: 'Preferences saved successfully!',
           type: 'success',
         });
         setTimeout(() => {
           onComplete?.();
+          console.log('[PreferenceForm] Navigating to trip:', effectiveTripId);
           navigate(`/trip/${effectiveTripId}`);
         }, 1500);
       } else {
@@ -138,15 +160,22 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8">
+          {/* Destination */}
+          <div>
+            <label className="block text-lg font-bold text-gray-900 mb-3">
+              Where do you want to go?
+            </label>
+            <LocationAutocomplete
+              value={destination}
+              onChange={setDestination}
+              placeholder="e.g., Tokyo, Japan"
+            />
+          </div>
           {/* Available Dates */}
           <div>
             <label className="block text-lg font-bold text-gray-900 mb-3">
-              When are you available? (Optional)
+              When are you available?
             </label>
-            <p className="text-sm text-gray-600 mb-4">
-              Add one or more date ranges when you're free to travel
-            </p>
-
             {/* Added Date Ranges */}
             {availableDates.length > 0 && (
               <div className="space-y-2 mb-4">
@@ -262,9 +291,9 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
           {/* Vibes */}
           <div>
             <label className="block text-lg font-bold text-gray-900 mb-2">
-              Pick your vibes (up to 6)
+              Pick your vibes (up to 3)
             </label>
-            <p className="text-sm text-gray-600 mb-4">Selected: {selectedVibes.length}/6</p>
+            <p className="text-sm text-gray-600 mb-4">Selected: {selectedVibes.length}/3</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {VIBE_OPTIONS.map((vibe) => {
                 const isSelected = selectedVibes.includes(vibe.value);

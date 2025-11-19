@@ -12,7 +12,7 @@ class Preference(BaseModel):
     Preference model for MongoDB storage
     Stores user travel preferences
     """
-
+    destination: str | None = Field(None, description="Preferred destination")
     trip_id: str = Field(..., description="Trip ID for trips")
     user_id: str = Field(..., description="User's Google ID")
     budget_level: int | None = Field(

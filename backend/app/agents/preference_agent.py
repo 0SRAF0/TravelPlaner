@@ -390,11 +390,22 @@ class PreferenceAgent:
                 - Ready for planning: {aggregate.ready_for_options}
                 - Coverage: {aggregate.coverage:.0%}
             """
+            # Aggregate destinations - pick most common
+            destinations = []
+            for pref_dict in preferences_data:
+                if pref_dict.get('destination'):
+                    destinations.append(pref_dict['destination'])
 
+            from collections import Counter
+            common_destination = None
+            if destinations:
+                common_destination = Counter(destinations).most_common(1)[0][0]
+    
             # Store output in agent_data (generic storage)
             preferences_summary = {
                 "trip_id": trip_id,
                 "members": aggregate.members,
+                "destination": common_destination,
                 "aggregated_vibes": aggregate.soft_mean,
                 "budget_levels": aggregate.hard_union.get("budget_level", []),
                 "conflicts": [f"{k}: {r}" for k, r in aggregate.conflicts],

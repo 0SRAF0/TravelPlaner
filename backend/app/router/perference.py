@@ -69,6 +69,7 @@ async def create_preference(body: CreatePreferenceRequest):
     """
     tid = body.trip_id
     uid = body.user_id
+    print(f"[preference] Received preference for trip={tid}, user={uid}, vibes={body.vibes}")
 
     col = get_preferences_collection()
 
@@ -83,6 +84,7 @@ async def create_preference(body: CreatePreferenceRequest):
         preference_doc = PreferenceDoc(
             trip_id=tid,
             user_id=uid,
+            destination=body.destination,
             budget_level=body.budget_level,
             vibes=body.vibes or [],
             deal_breaker=body.deal_breaker,
@@ -101,6 +103,7 @@ async def create_preference(body: CreatePreferenceRequest):
         preference_doc = PreferenceDoc(
             trip_id=tid,
             user_id=uid,
+            destination=body.destination,
             budget_level=body.budget_level,
             vibes=body.vibes or [],
             deal_breaker=body.deal_breaker,
