@@ -207,9 +207,7 @@ export function Chat() {
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
-                  <p className="text-sm mt-2">
-                    Start the conversation! Type "leggo" to get AI suggestions.
-                  </p>
+                  <p className="text-sm mt-2">Start chatting with your travel group!</p>
                 </div>
               ) : (
                 messages.map((msg, idx) => (
@@ -257,9 +255,6 @@ export function Chat() {
                 />
                 <Button text="Send" onClick={handleSendMessage} />
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                💡 Tip: Type "leggo" in your message to trigger AI travel suggestions
-              </p>
             </div>
           </div>
 

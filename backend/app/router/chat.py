@@ -62,40 +62,6 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
       for connection in active_connections[chat_id]:
         await connection.send_json(data)
 
-      # Check if message contains "leggo" to trigger AI
-      if "leggo" in data.get("content", "").lower():
-        print(f"[chat_ws] AI trigger detected in chat {chat_id}")
-        # Get full conversation history
-        messages = await messages_collection.find(
-          {"chatId": chat_id}
-        ).sort("createdAt", 1).to_list(length=None)
-        print(f"[chat_ws] Retrieved {len(messages)} messages for AI context")
-
-        # Generate AI response
-        ai_response = await generate_ai_response(messages)
-
-        # Save AI message to MongoDB
-        ai_message_doc = {
-          "chatId": chat_id,
-          "senderId": None,
-          "senderName": "AI Assistant",
-          "content": ai_response,
-          "type": "ai",
-          "createdAt": datetime.utcnow()
-        }
-        await messages_collection.insert_one(ai_message_doc)
-
-        # Broadcast AI message to all clients
-        ai_data = {
-          "senderId": "ai",
-          "senderName": "AI Assistant",
-          "content": ai_response,
-          "type": "ai",
-          "timestamp": datetime.utcnow().isoformat()
-        }
-        for connection in active_connections[chat_id]:
-          await connection.send_json(ai_data)
-
   except WebSocketDisconnect:
     print(f"[chat_ws] Client disconnected from chat {chat_id}")
     # Remove from active connections
@@ -103,51 +69,3 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
     if not active_connections[chat_id]:
       del active_connections[chat_id]
       print(f"[chat_ws] No more connections for chat {chat_id}, cleaning up")
-
-
-async def generate_ai_response(messages: List[dict]) -> str:
-  """
-  Generate AI response based on conversation history.
-  Replace this with your actual LLM integration.
-  """
-  from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
-  
-  if not GOOGLE_AI_API_KEY:
-    return "I'm sorry, but I'm not correctly configured to answer right now (Missing API Key)."
-
-  try:
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    llm = ChatGoogleGenerativeAI(
-        model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
-    )
-    # Build conversation context
-    system_prompt = """You are a helpful AI travel planning assistant for a group travel planning application. 
-    Your role is to help users plan their trips by:
-    - Answering questions about travel destinations, activities, and planning
-    - Providing suggestions for group travel
-    - Helping with itinerary planning
-    - Answering questions about preferences, budgets, and travel logistics
-    - Being friendly, informative, and concise
-    Keep your responses conversational and helpful. If you don't know something, admit it rather than making things up."""
-    # Format conversation history using LangChain message types
-    langchain_messages = [SystemMessage(content=system_prompt)]
-    # Add history (limit to last 10 messages to avoid token limits)
-    # Filter for user and ai messages only
-    relevant_messages = [m for m in messages if m.get('type') in ['user', 'ai']]
-    recent_history = relevant_messages[-10:]
-    
-    for msg in recent_history:
-        role = msg.get("type")
-        content = msg.get("content", "")
-        if content:
-            if role == "user":
-                langchain_messages.append(HumanMessage(content=content))
-            elif role == "ai":
-                langchain_messages.append(AIMessage(content=content))
-    # Get response from LLM
-    response = await llm.ainvoke(langchain_messages)
-    return response.content if hasattr(response, "content") else str(response)
-  except Exception as e:
-    print(f"Error generating AI response: {e}")
-    return "I'm having trouble thinking right now. Please try again later."
