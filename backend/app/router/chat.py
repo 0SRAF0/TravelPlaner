@@ -39,6 +39,9 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
       # Get MongoDB collections
       db = get_database()
       messages_collection = db.messages
+      users_collection = db.users
+      trips_collection = db.trips
+      preferences_collection = db.preferences
 
       # Save user message to MongoDB
       message_doc = {
@@ -62,8 +65,25 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
           {"chatId": chat_id}
         ).sort("createdAt", 1).to_list(length=None)
 
-        # Generate AI response
-        ai_response = await generate_ai_response(messages)
+        # --- Fetch user preferences and trip details ---
+        user_id = data.get("senderId")
+        trip_id = chat_id
+        user_pref = await preferences_collection.find_one({"user_id": user_id, "trip_id": trip_id})
+        trip = await trips_collection.find_one({"_id": trip_id})
+        user = await users_collection.find_one({"google_id": user_id})
+
+        # Build context string
+        context_lines = []
+        if user:
+          context_lines.append(f"User: {user.get('name', 'Unknown')}")
+        if trip:
+          context_lines.append(f"Trip: {trip.get('trip_name', 'N/A')}, Destination: {trip.get('destination', 'N/A')}")
+        if user_pref:
+          context_lines.append(f"Preferences: {user_pref.get('preferences', user_pref)}")
+        context = " | ".join(context_lines)
+
+        # Generate AI response with context
+        ai_response = await generate_ai_response(messages, context)
 
         # Save AI message to MongoDB
         ai_message_doc = {
@@ -94,13 +114,13 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
       del active_connections[chat_id]
 
 
-async def generate_ai_response(messages: List[dict]) -> str:
+async def generate_ai_response(messages: List[dict], context: str = "") -> str:
   """
   Generate AI response based on conversation history.
   Replace this with your actual LLM integration.
   """
   from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
-  
+
   if not GOOGLE_AI_API_KEY:
     return "I'm sorry, but I'm not correctly configured to answer right now (Missing API Key)."
 
@@ -110,22 +130,25 @@ async def generate_ai_response(messages: List[dict]) -> str:
     llm = ChatGoogleGenerativeAI(
         model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
     )
-    # Build conversation context
-    system_prompt = """You are a helpful AI travel planning assistant for a group travel planning application. 
+    # Build conversation context with extra context
+    system_prompt = f"""You are a helpful AI travel planning assistant for a group travel planning application. 
     Your role is to help users plan their trips by:
     - Answering questions about travel destinations, activities, and planning
     - Providing suggestions for group travel
     - Helping with itinerary planning
     - Answering questions about preferences, budgets, and travel logistics
     - Being friendly, informative, and concise
-    Keep your responses conversational and helpful. If you don't know something, admit it rather than making things up."""
+    Keep your responses conversational and helpful. If you don't know something, admit it rather than making things up.
+
+    Context for this conversation: {context}
+    """
     # Format conversation history using LangChain message types
     langchain_messages = [SystemMessage(content=system_prompt)]
     # Add history (limit to last 10 messages to avoid token limits)
     # Filter for user and ai messages only
     relevant_messages = [m for m in messages if m.get('type') in ['user', 'ai']]
     recent_history = relevant_messages[-10:]
-    
+
     for msg in recent_history:
         role = msg.get("type")
         content = msg.get("content", "")
@@ -137,6 +160,7 @@ async def generate_ai_response(messages: List[dict]) -> str:
     # Get response from LLM
     response = await llm.ainvoke(langchain_messages)
     return response.content if hasattr(response, "content") else str(response)
+
   except Exception as e:
     print(f"Error generating AI response: {e}")
     return "I'm having trouble thinking right now. Please try again later."
