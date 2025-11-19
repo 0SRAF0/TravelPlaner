@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import CreateTripModal from '../trip/components/CreateTripModal.tsx';
@@ -18,6 +18,7 @@ interface Trip {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [tripCode, setTripCode] = useState('');
@@ -39,6 +40,44 @@ const Dashboard = () => {
   useEffect(() => {
     fetchuser();
   }, []);
+
+  // Handle URL query params to trigger UI actions from other parts of the app
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const action = params.get('action');
+
+    if (action === 'create') {
+      setShowCreateModal(true);
+      return;
+    }
+
+    if (action === 'join') {
+      const code = params.get('trip_code');
+      const auto = params.get('auto');
+      if (code) {
+        setTripCode(code.toUpperCase());
+        // If auto=true, attempt to join immediately
+        if (auto === 'true') {
+          // small timeout to allow state to settle
+          setTimeout(() => {
+            handleJoinTrip();
+          }, 200);
+        } else {
+          // focus the join input (best-effort)
+          setTimeout(() => {
+            const el = document.querySelector<HTMLInputElement>('input[placeholder="Enter trip code"]');
+            el?.focus();
+          }, 100);
+        }
+      } else {
+        // Just focus the join input so the user can paste the code
+        setTimeout(() => {
+          const el = document.querySelector<HTMLInputElement>('input[placeholder="Enter trip code"]');
+          el?.focus();
+        }, 100);
+      }
+    }
+  }, [location.search]);
 
   const fetchuser = async () => {
     setLoading(true);
