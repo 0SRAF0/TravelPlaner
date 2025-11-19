@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Input from '../input/Input';
 import { chatBotService, type ChatMessage } from '../../services/chatBotService.ts';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -10,6 +11,7 @@ interface ChatBoxProps {
 }
 
 export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -71,6 +73,42 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     }
   };
 
+  // Send a message programmatically (used by quick action buttons)
+  const sendPrefilledMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: text.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      // include current UI context (path) so assistant can provide contextual help
+      const contextNote = `Current path: ${window.location.pathname}`;
+      const response = await chatBotService.sendMessage(`${text}\n\n${contextNote}`, messages.concat(userMessage));
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content:
+          error instanceof Error ? error.message : 'Sorry, something went wrong. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const escapeHtml = (text: string) =>
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -82,6 +120,34 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
       .replace(/`(.+?)`/gs, '<code>$1</code>')
       .replace(/\n/g, '<br />');
   };
+
+  // Suggested quick actions for support assistant
+  const suggestedActions: { label: string; type: 'nav' | 'msg' | 'join'; payload?: string }[] = [
+    { label: 'Create a trip', type: 'nav', payload: '/dashboard?action=create' },
+    { label: 'Join a trip', type: 'join' },
+    { label: 'Where are my trips?', type: 'nav', payload: '/dashboard' },
+  ];
+
+  const [joinPromptOpen, setJoinPromptOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const joinInputRef = useRef<HTMLInputElement>(null);
+
+  const submitJoinCode = () => {
+    const code = (joinCode || '').trim();
+    if (!code) return;
+    // Navigate to dashboard with params that will auto-join
+    navigate(`/dashboard?action=join&trip_code=${encodeURIComponent(code)}&auto=true`);
+    setJoinPromptOpen(false);
+    setJoinCode('');
+    // keep chat open — user will see navigation
+  };
+
+  useEffect(() => {
+    if (joinPromptOpen) {
+      // focus the inline join input
+      setTimeout(() => joinInputRef.current?.focus(), 50);
+    }
+  }, [joinPromptOpen]);
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -128,6 +194,57 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             </div>
           </div>
         ))}
+        {/* Quick suggestion chips shown under the initial assistant message */}
+        {messages.length > 0 && messages[0]?.role === 'assistant' && (
+          <div className="flex flex-col gap-2 mt-1">
+            <div className="flex flex-wrap gap-2">
+              {suggestedActions.map((a) => (
+                <button
+                  key={a.label}
+                  onClick={() => {
+                    if (a.type === 'nav' && a.payload) navigate(a.payload);
+                    else if (a.type === 'msg' && a.payload) sendPrefilledMessage(a.payload);
+                    else if (a.type === 'join') setJoinPromptOpen(true);
+                  }}
+                  className="px-3 py-1 bg-gray-100 text-sm rounded-full border border-gray-200 hover:bg-gray-200"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+
+            {joinPromptOpen && (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  ref={joinInputRef}
+                  type="text"
+                  placeholder="Enter trip code"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') submitJoinCode();
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                />
+                <button
+                  onClick={submitJoinCode}
+                  className="px-3 py-1 bg-primary text-white rounded-lg"
+                >
+                  Join
+                </button>
+                <button
+                  onClick={() => {
+                    setJoinPromptOpen(false);
+                    setJoinCode('');
+                  }}
+                  className="px-3 py-1 bg-gray-100 rounded-lg border"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
