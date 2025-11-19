@@ -99,15 +99,44 @@ async def generate_ai_response(messages: List[dict]) -> str:
   Generate AI response based on conversation history.
   Replace this with your actual LLM integration.
   """
-  # TODO: Replace with actual LLM call (OpenAI, Claude, etc.)
-  # For now, a simple response
+  from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
+  
+  if not GOOGLE_AI_API_KEY:
+    return "I'm sorry, but I'm not correctly configured to answer right now (Missing API Key)."
 
-  # Build conversation context
-  conversation = "\n".join([
-    f"{msg['senderName']}: {msg['content']}"
-    for msg in messages
-    if msg['type'] == 'user'
-  ])
-
-  # Simple mock response - replace with actual LLM
-  return f"Based on your discussion, I recommend starting with destination research. What's your group's budget range and preferred travel dates?"
+  try:
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    llm = ChatGoogleGenerativeAI(
+        model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
+    )
+    # Build conversation context
+    system_prompt = """You are a helpful AI travel planning assistant for a group travel planning application. 
+    Your role is to help users plan their trips by:
+    - Answering questions about travel destinations, activities, and planning
+    - Providing suggestions for group travel
+    - Helping with itinerary planning
+    - Answering questions about preferences, budgets, and travel logistics
+    - Being friendly, informative, and concise
+    Keep your responses conversational and helpful. If you don't know something, admit it rather than making things up."""
+    # Format conversation history using LangChain message types
+    langchain_messages = [SystemMessage(content=system_prompt)]
+    # Add history (limit to last 10 messages to avoid token limits)
+    # Filter for user and ai messages only
+    relevant_messages = [m for m in messages if m.get('type') in ['user', 'ai']]
+    recent_history = relevant_messages[-10:]
+    
+    for msg in recent_history:
+        role = msg.get("type")
+        content = msg.get("content", "")
+        if content:
+            if role == "user":
+                langchain_messages.append(HumanMessage(content=content))
+            elif role == "ai":
+                langchain_messages.append(AIMessage(content=content))
+    # Get response from LLM
+    response = await llm.ainvoke(langchain_messages)
+    return response.content if hasattr(response, "content") else str(response)
+  except Exception as e:
+    print(f"Error generating AI response: {e}")
+    return "I'm having trouble thinking right now. Please try again later."
