@@ -334,18 +334,24 @@ class DestinationResearchAgent:
         max_items = int((hints or {}).get("max_items", 20))
         preferred_categories = list((hints or {}).get("preferred_categories") or [])
 
-        # Log start of generation
+        # Log start of generation with detailed context
         try:
             print("\n" + "=" * 80)
             print("  DESTINATION RESEARCH START")
             print("=" * 80)
-            print(f"Trip: {trip_id}")
-            print(f"Destination: {dest}")
-            print(f"Radius (km): {radius_km}")
-            print(f"Max items: {max_items}")
-            print(f"Preferred categories: {preferred_categories}")
-        except Exception:
-            pass
+            print(f"[DEBUG] Trip ID: {trip_id}")
+            print(f"[DEBUG] Destination: {dest}")
+            print(f"[DEBUG] Radius (km): {radius_km}")
+            print(f"[DEBUG] Max items: {max_items}")
+            print(f"[DEBUG] Preferred categories: {preferred_categories}")
+            print(f"[DEBUG] Input data sizes:")
+            print(f"  - Members count: {len(ps.members)}")
+            print(f"  - Aggregated vibes: {len(ps.aggregated_vibes)} vibes")
+            print(f"  - Budget levels: {ps.budget_levels}")
+            print(f"  - Group budget band: {_median_budget(ps.budget_levels)}")
+            print(f"[PERF] Start timestamp: {time.time()}")
+        except Exception as e:
+            print(f"[WARN] Failed to log startup details: {e}")
 
         cache_key = (
             f"{trip_id}|{dest_key}|{radius_km}|{max_items}|{','.join(sorted(preferred_categories))}"
@@ -410,11 +416,50 @@ class DestinationResearchAgent:
 
         structured_llm = self.llm.with_structured_output(ActivityCatalogOut)
         run = prompt | structured_llm
-        try:
-            result: ActivityCatalogOut = run.invoke({"payload": payload})
-        except Exception as e:
-            err_text = f"{type(e).__name__}: {e}"
-            print(f"[destination_research] LLM invocation failed: {err_text}")
+        
+        # Retry logic with detailed logging
+        max_retries = 3
+        result: ActivityCatalogOut | None = None
+        last_error = None
+        
+        for api_attempt in range(1, max_retries + 1):
+            api_start = time.time()
+            try:
+                print(f"[API] Calling Gemini API for activity generation (attempt {api_attempt}/{max_retries})...")
+                result = run.invoke({"payload": payload})
+                api_latency = (time.time() - api_start) * 1000
+                print(f"[API] ✅ Gemini API call succeeded")
+                print(f"[PERF] API latency: {api_latency:.2f}ms")
+                print(f"[PERF] Activities generated: {len(result.activity_catalog)}")
+                break  # Success, exit retry loop
+            except Exception as e:
+                api_latency = (time.time() - api_start) * 1000
+                last_error = e
+                err_text = f"{type(e).__name__}: {e}"
+                print(f"[API] ❌ Gemini API call failed after {api_latency:.2f}ms")
+                print(f"[ERROR] Attempt {api_attempt}/{max_retries}")
+                print(f"[ERROR] Error type: {type(e).__name__}")
+                print(f"[ERROR] Error message: {str(e)}")
+                
+                # Categorize error
+                if "quota" in str(e).lower() or "rate" in str(e).lower():
+                    print(f"[ERROR] Cause: Rate limit/quota exceeded")
+                elif "timeout" in str(e).lower():
+                    print(f"[ERROR] Cause: Request timeout")
+                else:
+                    print(f"[ERROR] Cause: Network or API error")
+                
+                if api_attempt < max_retries:
+                    retry_delay = 2 ** api_attempt  # Exponential backoff: 2s, 4s, 8s
+                    print(f"[RETRY] Waiting {retry_delay}s before retry...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"[ERROR] All {max_retries} attempts failed")
+        
+        # Handle failure after all retries
+        if result is None:
+            err_text = f"{type(last_error).__name__}: {last_error}" if last_error else "Unknown error"
+            print(f"[destination_research] LLM invocation failed after {max_retries} attempts: {err_text}")
             # Fallback: empty catalog with actionable insights
             insights = [
                 "Broaden radius to 15 km",
@@ -500,20 +545,38 @@ class DestinationResearchAgent:
             )
         )
 
-        # Log completion summary
+        # Log completion summary with detailed metrics
         try:
+            total_latency = metrics.get('latency_ms', 0)
             print("\n" + "=" * 80)
             print("  DESTINATION RESEARCH COMPLETE")
             print("=" * 80)
-            print(f"Trip: {trip_id}")
-            print(f"Destination: {dest}")
-            print(f"Activities generated: {len(out.activity_catalog)}")
+            print(f"[RESULT] Trip: {trip_id}")
+            print(f"[RESULT] Destination: {dest}")
+            print(f"[RESULT] Activities generated: {len(out.activity_catalog)}")
+            print(f"[PERF] Total latency: {total_latency}ms ({total_latency/1000:.2f}s)")
+            
+            # Activity breakdown by category
             if out.activity_catalog:
+                from collections import Counter
+                categories = Counter([getattr(a, "category", "Other") for a in out.activity_catalog])
+                print(f"[RESULT] Activity breakdown by category:")
+                for cat, count in categories.most_common():
+                    print(f"  - {cat}: {count}")
+                
                 sample_names = [getattr(a, "name", "") for a in out.activity_catalog[:5]]
-                print(f"Sample activities: {sample_names}")
+                print(f"[RESULT] Sample activities: {sample_names}")
+                
+                # Score distribution
+                scores = [getattr(a, "score", 0.0) for a in out.activity_catalog if hasattr(a, "score")]
+                if scores:
+                    avg_score = sum(scores) / len(scores)
+                    print(f"[RESULT] Average activity score: {avg_score:.2f}")
+            
             if out.warnings:
-                print(f"Warnings: {out.warnings}")
-            print(f"Latency (ms): {metrics.get('latency_ms')}")
+                print(f"[WARN] Warnings: {out.warnings}")
+            if out.insights:
+                print(f"[INFO] Insights: {out.insights}")
         except Exception:
             pass
         return state

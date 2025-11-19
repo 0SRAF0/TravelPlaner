@@ -310,6 +310,7 @@ class PreferenceAgent:
         Fetch all preferences for trip_id and create embeddings.
         This is the main node that does all the work.
         """
+        t0 = time.time()
         trip_id = state.get("trip_id") or state.get("trip_id")
 
         if not trip_id:
@@ -318,11 +319,20 @@ class PreferenceAgent:
                 "done": True,
             }
 
-        print(f"[preference._fetch_and_process] Fetching preferences for trip: {trip_id}")
+        print("\n" + "=" * 80)
+        print("  PREFERENCE AGENT START")
+        print("=" * 80)
+        print(f"[DEBUG] Trip ID: {trip_id}")
+        print(f"[PERF] Start timestamp: {time.time()}")
 
         try:
             # Fetch preferences from database (async tool)
+            fetch_start = time.time()
+            print(f"[DB] Fetching preferences from database...")
             result = await get_all_trip_preferences.ainvoke({"trip_id": trip_id})
+            fetch_latency = (time.time() - fetch_start) * 1000
+            print(f"[DB] ✅ Database fetch completed")
+            print(f"[PERF] Database fetch latency: {fetch_latency:.2f}ms")
 
             if "_error" in result:
                 return {
@@ -333,12 +343,20 @@ class PreferenceAgent:
                 }
 
             preferences_data = result.get("preferences", [])
-            print(f"[preference._fetch_and_process] Found {len(preferences_data)} preferences")
+            print(f"[DEBUG] Found {len(preferences_data)} preferences in database")
+            print(f"[DEBUG] Input data sizes:")
+            print(f"  - Preference count: {len(preferences_data)}")
 
             # Convert to Preference models and create embeddings
+            embed_start = time.time()
             profiles_created = 0
-            for pref_dict in preferences_data:
+            embedding_times = []
+            
+            print(f"[PROCESSING] Creating embeddings for {len(preferences_data)} preferences...")
+            for idx, pref_dict in enumerate(preferences_data, 1):
                 try:
+                    item_start = time.time()
+                    
                     # Create Preference model
                     pref = Preference(**pref_dict)
 
@@ -346,7 +364,12 @@ class PreferenceAgent:
                     hard = self._normalize_hard(pref)
                     soft = self._normalize_soft(pref.vibes)
                     summary = self._summarize(pref)
+                    
+                    # Track embedding generation time
+                    emb_start = time.time()
                     vec = embed_text(summary)
+                    emb_time = (time.time() - emb_start) * 1000
+                    embedding_times.append(emb_time)
 
                     profile = UserPreferenceProfile(
                         trip_id=trip_id,
@@ -369,18 +392,56 @@ class PreferenceAgent:
                         self.trips[trip_id].append(pref.user_id)
 
                     profiles_created += 1
+                    item_latency = (time.time() - item_start) * 1000
+                    
+                    if idx % 5 == 0 or idx == len(preferences_data):  # Log every 5th or last
+                        print(f"[PROCESSING] Processed {idx}/{len(preferences_data)} preferences (last item: {item_latency:.2f}ms)")
 
                 except Exception as e:
-                    print(f"[preference._fetch_and_process] Error processing preference: {e}")
+                    print(f"[ERROR] Failed to process preference {idx}/{len(preferences_data)}: {type(e).__name__}: {e}")
                     continue
 
-            print(
-                f"[preference._fetch_and_process] Created {profiles_created} profiles with embeddings"
-            )
+            embed_total_latency = (time.time() - embed_start) * 1000
+            avg_embedding_time = sum(embedding_times) / len(embedding_times) if embedding_times else 0
+            
+            print(f"[PROCESSING] ✅ Created {profiles_created} profiles with embeddings")
+            print(f"[PERF] Total embedding generation time: {embed_total_latency:.2f}ms")
+            print(f"[PERF] Average embedding time per preference: {avg_embedding_time:.2f}ms")
 
             # Aggregate preferences
+            agg_start = time.time()
+            print(f"[PROCESSING] Computing preference aggregation...")
             aggregate = self.aggregate(trip_id)
+            agg_latency = (time.time() - agg_start) * 1000
+            print(f"[PERF] Aggregation latency: {agg_latency:.2f}ms")
 
+            # Log detailed aggregation results
+            print("\n" + "=" * 80)
+            print("  PREFERENCE AGENT COMPLETE")
+            print("=" * 80)
+            print(f"[RESULT] Trip: {trip_id}")
+            print(f"[RESULT] Members: {len(aggregate.members)}")
+            print(f"[RESULT] Coverage: {aggregate.coverage:.0%} ({len(aggregate.members)} members)")
+            print(f"[RESULT] Ready for planning: {aggregate.ready_for_options}")
+            
+            if aggregate.soft_mean:
+                top_vibes = dict(sorted(aggregate.soft_mean.items(), key=lambda x: -x[1])[:5])
+                print(f"[RESULT] Top 5 vibes:")
+                for vibe, score in top_vibes.items():
+                    print(f"  - {vibe}: {score:.2f}")
+            
+            budget_levels = aggregate.hard_union.get("budget_level", [])
+            if budget_levels:
+                print(f"[RESULT] Budget levels: {budget_levels}")
+            
+            if aggregate.conflicts:
+                print(f"[WARN] Conflicts detected:")
+                for key, reason in aggregate.conflicts:
+                    print(f"  - {key}: {reason}")
+            
+            total_latency = (time.time() - t0) * 1000
+            print(f"[PERF] Total preference agent latency: {total_latency:.2f}ms ({total_latency/1000:.2f}s)")
+            
             summary_msg = f"""
                 [preference] Processing complete for trip {trip_id}:
                 - Members: {len(aggregate.members)}

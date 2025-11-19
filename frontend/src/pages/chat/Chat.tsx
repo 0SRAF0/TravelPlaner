@@ -20,6 +20,9 @@ interface AgentStatus {
   status: 'starting' | 'running' | 'completed' | 'error';
   step: string;
   timestamp: string;
+  progress?: { current: number; total: number } | number;
+  elapsed_seconds?: number;
+  step_history?: Array<{ step: string; timestamp: string }>;
 }
 
 export function Chat() {
@@ -28,6 +31,7 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
   const [inputMessage, setInputMessage] = useState('');
+  const [showHistory, setShowHistory] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -83,10 +87,16 @@ export function Chat() {
           const existing = prev.findIndex((s) => s.agent_name === message.agent_name);
           if (existing >= 0) {
             const updated = [...prev];
-            updated[existing] = message;
+            const oldAgent = updated[existing];
+            // Merge step history (keep last 10 steps)
+            const newHistory = [
+              ...(oldAgent.step_history || []),
+              { step: oldAgent.step, timestamp: oldAgent.timestamp },
+            ].slice(-10);
+            updated[existing] = { ...message, step_history: newHistory };
             return updated;
           }
-          return [...prev, message];
+          return [...prev, { ...message, step_history: [] }];
         });
       } else {
         setMessages((prev) => [...prev, message]);
@@ -184,11 +194,11 @@ export function Chat() {
           <Button text="Back to Trip" onClick={() => navigate(`/trip/${tripId}`)} />
         </div>
 
-        {/* Main Content - Split 50/50 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-180px)]">
-          {/* Left Half - Chat */}
-          <div className="flex flex-col bg-white rounded-xl shadow-sm">
-            <div className="p-4 border-b">
+        {/* Main Content - Split 40/60 for better interaction space */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-180px)]">
+          {/* Left Side - Chat (40%) */}
+          <div className="lg:col-span-2 flex flex-col bg-white rounded-xl shadow-sm">
+            <div className="p-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50">
               <h2 className="text-lg font-bold text-gray-900">Chat</h2>
             </div>
 
@@ -253,14 +263,14 @@ export function Chat() {
             </div>
           </div>
 
-          {/* Right Half - Activities (80%) + Agent Status (20%) */}
-          <div className="flex flex-col gap-4">
-            {/* Interactive Activities Area - 80% */}
-            <div className="flex-[4] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 border-b">
-                <h2 className="text-lg font-bold text-gray-900">Suggested Activities</h2>
-                <p className="text-xs text-gray-600 mt-1">
-                  Vote on activities to build your itinerary
+          {/* Right Side - Interactive Space (70%) + Agent Status (30%) */}
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            {/* Interactive Area - 70% */}
+            <div className="flex-[7] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col min-h-0">
+              <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+                <h2 className="text-xl font-bold text-gray-900">Interactive Space</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Vote on activities, finalize plans, and collaborate with your travel group
                 </p>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
@@ -280,43 +290,128 @@ export function Chat() {
               </div>
             </div>
 
-            {/* Agent Status Area - 20% */}
-            <div className="flex-[1] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 border-b">
-                <h2 className="text-sm font-bold text-gray-900">AI Agent Status</h2>
+            {/* Agent Status Area - 30% */}
+            <div className="flex-[3] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col min-h-0">
+              <div className="p-4 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+                <h2 className="text-base font-bold text-gray-900">🤖 AI Agent Status</h2>
               </div>
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto p-4">
                 {agentStatuses.length === 0 ? (
-                  <div className="text-center text-gray-500 py-4">
-                    <p className="text-xs">No active agents</p>
+                  <div className="text-center text-gray-500 py-8">
+                    <p className="text-sm">No active agents</p>
+                    <p className="text-xs mt-2 opacity-75">
+                      AI agents will appear here when processing
+                    </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {agentStatuses.map((agent, idx) => (
-                      <div
-                        key={idx}
-                        className={`border-2 rounded-lg p-2 ${getStatusColor(agent.status)}`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-base">{getStatusIcon(agent.status)}</span>
-                          <span className="font-semibold text-xs">{agent.agent_name}</span>
-                        </div>
-                        <p className="text-xs">{agent.step}</p>
-                        {agent.status === 'running' && (
-                          <div className="mt-1">
-                            <div className="w-full bg-gray-200 rounded-full h-1">
-                              <div className="bg-blue-600 h-1 rounded-full animate-pulse w-3/4"></div>
+                  <div className="space-y-3">
+                    {agentStatuses.map((agent, idx) => {
+                      const progressPercent = agent.progress
+                        ? typeof agent.progress === 'number'
+                          ? agent.progress
+                          : (agent.progress.current / agent.progress.total) * 100
+                        : 0;
+                      const hasHistory = (agent.step_history?.length || 0) > 0;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`border-2 rounded-lg p-4 relative ${getStatusColor(agent.status)}`}
+                        >
+                          {/* Header with icon, name, and elapsed time */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">{getStatusIcon(agent.status)}</span>
+                              <span className="font-semibold text-sm">{agent.agent_name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {agent.elapsed_seconds !== undefined &&
+                                agent.status === 'running' && (
+                                  <span className="text-xs opacity-75 font-mono bg-gray-100 px-2 py-0.5 rounded">
+                                    {agent.elapsed_seconds}s
+                                  </span>
+                                )}
+                              {hasHistory && (
+                                <button
+                                  onClick={() => setShowHistory(agent.agent_name)}
+                                  className="text-sm hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                                  title="View step history"
+                                >
+                                  📋
+                                </button>
+                              )}
                             </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Current step */}
+                          <p className="text-sm mb-2 text-gray-700">{agent.step}</p>
+
+                          {/* Progress info */}
+                          {agent.progress && (
+                            <p className="text-xs opacity-75 mb-2 font-mono">
+                              {typeof agent.progress === 'number'
+                                ? `${agent.progress}%`
+                                : `${agent.progress.current}/${agent.progress.total}`}
+                            </p>
+                          )}
+
+                          {/* Progress bar */}
+                          {agent.status === 'running' && (
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  style={{
+                                    width: `${progressPercent || 75}%`,
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Step History Modal */}
+        {showHistory && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowHistory(null)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">{showHistory} - Step History</h3>
+                <button
+                  onClick={() => setShowHistory(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {agentStatuses
+                  .find((a) => a.agent_name === showHistory)
+                  ?.step_history?.map((historyItem, idx) => (
+                    <div key={idx} className="border-l-2 border-blue-300 pl-3 py-1">
+                      <p className="text-xs text-gray-600">
+                        {new Date(historyItem.timestamp).toLocaleTimeString()}
+                      </p>
+                      <p className="text-sm text-gray-900">{historyItem.step}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

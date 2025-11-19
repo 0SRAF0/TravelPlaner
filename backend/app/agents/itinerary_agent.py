@@ -137,10 +137,15 @@ class ItineraryAgent:
         t0 = time.time()
         agent_data = dict(state.get("agent_data", {}) or {})
 
+        print("\n" + "=" * 80)
+        print("  ITINERARY AGENT START")
+        print("=" * 80)
+        print(f"[PERF] Start timestamp: {time.time()}")
+
         hints = state.get("hints") or agent_data.get("hints") or {}
         force = bool((hints or {}).get("force", False))
         if agent_data.get("itinerary") and not force:
-            # Short circuit
+            print(f"[DEBUG] Itinerary already exists, short-circuiting")
             return state
 
         # Flexible input locations: top-level or agent_data
@@ -151,6 +156,14 @@ class ItineraryAgent:
             "trip_duration_days", 3
         )
         start_date = state.get("start_date") or agent_data.get("start_date")
+
+        # Log input data sizes
+        print(f"[DEBUG] Input data sizes:")
+        print(f"  - Trip duration: {trip_duration_days} days")
+        print(f"  - Activity catalog size: {len(activity_catalog) if activity_catalog else 0} activities")
+        print(f"  - Has preferences: {pref_summary is not None}")
+        print(f"  - Destination: {destination}")
+        print(f"  - Start date: {start_date}")
 
         insights: List[str] = []
         warnings: List[str] = []
@@ -212,6 +225,8 @@ class ItineraryAgent:
             return state
 
         # Prepare LLM call
+        payload_start = time.time()
+        print(f"[PROCESSING] Preparing itinerary generation payload...")
         payload = {
             "preferences_summary": input_data.preferences_summary.dict(),
             "destination": input_data.destination,
@@ -220,6 +235,11 @@ class ItineraryAgent:
             "start_date": input_data.start_date,
             "hints": input_data.hints,
         }
+        payload_latency = (time.time() - payload_start) * 1000
+        print(f"[PERF] Payload preparation: {payload_latency:.2f}ms")
+        print(f"[DEBUG] Payload sizes:")
+        print(f"  - Activities in catalog: {len(payload['activity_catalog'])}")
+        print(f"  - Trip duration: {payload['trip_duration_days']} days")
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -249,11 +269,46 @@ class ItineraryAgent:
 
         structured_llm = self.llm.with_structured_output(ItineraryOut)
         run = prompt | structured_llm
-        try:
-            result: ItineraryOut = run.invoke({"payload": payload})
-        except Exception as e:
-            err_text = f"{type(e).__name__}: {e}"
-            print(f"[{AGENT_LABEL}] LLM invocation failed: {err_text}")
+        
+        # Retry logic with timing
+        max_retries = 3
+        result: ItineraryOut | None = None
+        last_error = None
+        
+        for attempt in range(1, max_retries + 1):
+            api_start = time.time()
+            try:
+                print(f"[API] Calling Gemini API for itinerary generation (attempt {attempt}/{max_retries})...")
+                result = run.invoke({"payload": payload})
+                api_latency = (time.time() - api_start) * 1000
+                print(f"[API] ✅ Gemini API call succeeded")
+                print(f"[PERF] API latency: {api_latency:.2f}ms")
+                print(f"[PERF] Days generated: {len(result.itinerary)}")
+                break  # Success
+            except Exception as e:
+                api_latency = (time.time() - api_start) * 1000
+                last_error = e
+                err_text = f"{type(e).__name__}: {e}"
+                print(f"[API] ❌ Gemini API call failed after {api_latency:.2f}ms")
+                print(f"[ERROR] Attempt {attempt}/{max_retries}")
+                print(f"[ERROR] Error type: {type(e).__name__}")
+                print(f"[ERROR] Error message: {str(e)}")
+                
+                if "quota" in str(e).lower() or "rate" in str(e).lower():
+                    print(f"[ERROR] Cause: Rate limit/quota exceeded")
+                elif "timeout" in str(e).lower():
+                    print(f"[ERROR] Cause: Request timeout")
+                
+                if attempt < max_retries:
+                    retry_delay = 2 ** attempt
+                    print(f"[RETRY] Waiting {retry_delay}s before retry...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"[ERROR] All {max_retries} attempts failed")
+        
+        if result is None:
+            err_text = f"{type(last_error).__name__}: {last_error}" if last_error else "Unknown error"
+            print(f"[{AGENT_LABEL}] LLM invocation failed after {max_retries} attempts: {err_text}")
             out = ItineraryOut(
                 itinerary=[],
                 insights=["LLM failed to generate itinerary. Try adjusting inputs or hints."],
@@ -269,16 +324,32 @@ class ItineraryAgent:
             return state
 
         metrics = dict(result.metrics or {})
+        total_activities = sum(len(day.items) for day in result.itinerary)
         metrics.update(
             {
                 "generated_days": len(result.itinerary),
-                "total_activities": sum(len(day.items) for day in result.itinerary),
+                "total_activities": total_activities,
                 "latency_ms": int((time.time() - t0) * 1000),
                 "trip_id": trip_id,
                 "destination": destination,
                 "trip_duration_days": trip_duration_days,
             }
         )
+        
+        # Log completion summary
+        print("\n" + "=" * 80)
+        print("  ITINERARY AGENT COMPLETE")
+        print("=" * 80)
+        print(f"[RESULT] Trip: {trip_id}")
+        print(f"[RESULT] Destination: {destination}")
+        print(f"[RESULT] Days generated: {len(result.itinerary)}")
+        print(f"[RESULT] Total activities in itinerary: {total_activities}")
+        print(f"[RESULT] Activities per day:")
+        for idx, day in enumerate(result.itinerary, 1):
+            print(f"  - Day {idx}: {len(day.items)} activities")
+        
+        total_latency = (time.time() - t0) * 1000
+        print(f"[PERF] Total itinerary agent latency: {total_latency:.2f}ms ({total_latency/1000:.2f}s)")
 
         out = ItineraryOut(
             itinerary=result.itinerary or [],

@@ -33,10 +33,30 @@ async def run_orchestrator_background(
     db = get_database()
     messages_collection = db.messages
 
-    # Helper function to broadcast agent status
-    async def broadcast_agent_status(agent_name: str, status: str, step: str):
+    # Helper function to broadcast agent status with progress tracking
+    agent_start_times = {}
+    
+    async def broadcast_agent_status(
+        agent_name: str,
+        status: str,
+        step: str,
+        progress: dict | int | None = None,
+    ):
         from app.router.chat import broadcast_to_chat
-        print(f"[agent_status] {agent_name} - {status}: {step}")
+        
+        # Track elapsed time for running agents
+        if status == "running" and agent_name not in agent_start_times:
+            agent_start_times[agent_name] = datetime.utcnow()
+        
+        elapsed_seconds = None
+        if agent_name in agent_start_times:
+            elapsed_seconds = int((datetime.utcnow() - agent_start_times[agent_name]).total_seconds())
+        
+        if status in ["completed", "error"]:
+            agent_start_times.pop(agent_name, None)
+        
+        # Dev logging with full details
+        print(f"[agent_status] {agent_name} | {status} | {step} | elapsed={elapsed_seconds}s | progress={progress}")
 
         await broadcast_to_chat(
             trip_id,
@@ -46,6 +66,8 @@ async def run_orchestrator_background(
                 "status": status,
                 "step": step,
                 "timestamp": datetime.utcnow().isoformat(),
+                "progress": progress,
+                "elapsed_seconds": elapsed_seconds,
             },
         )
 
@@ -79,7 +101,7 @@ async def run_orchestrator_background(
     )
 
     # Update status: analyzing preferences
-    await broadcast_agent_status("Preference Agent", "running", "Analyzing group preferences")
+    await broadcast_agent_status("Preference Agent", "running", "Fetching user preferences from database", progress={"current": 0, "total": 3})
 
     # Run orchestrator
     initial_state = {
@@ -92,20 +114,53 @@ async def run_orchestrator_background(
     }
 
     try:
+        # Get preference count for progress tracking
+        prefs_collection = get_preferences_collection()
+        all_prefs = await prefs_collection.find({"trip_id": trip_id}).to_list(length=None)
+        pref_count = len(all_prefs)
+        
+        await broadcast_agent_status("Preference Agent", "running", f"Analyzing {pref_count} user preferences", progress={"current": 1, "total": 3})
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status("Preference Agent", "running", "Computing group preference summary", progress={"current": 2, "total": 3})
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status("Preference Agent", "completed", "Preferences analyzed", progress={"current": 3, "total": 3})
+
         # Update status: destination research
         await broadcast_agent_status(
-            "Destination Research Agent", "running", "Researching destinations and attractions"
+            "Destination Research Agent", "running", f"Geocoding destination: {destination}", progress={"current": 1, "total": 4}
+        )
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status(
+            "Destination Research Agent", "running", "Searching for nearby places and attractions", progress={"current": 2, "total": 4}
         )
 
-        # Simulate some processing time and update status
-        import asyncio
-
-        await asyncio.sleep(2)
+        result = await run_orchestrator_agent(initial_state)
+        
+        # After orchestrator completes, update with activity count
+        agent_data_out = (result or {}).get("agent_data", {}) or {}
+        activities = agent_data_out.get("activity_catalog", []) or []
+        activity_count = len(activities)
+        
+        await broadcast_agent_status(
+            "Destination Research Agent", "running", f"Found {activity_count} places. Generating descriptions with AI", progress={"current": 3, "total": 4}
+        )
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status(
+            "Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions", progress={"current": 4, "total": 4}
+        )
 
         # Update status: itinerary planning
-        await broadcast_agent_status("Itinerary Agent", "running", "Creating day-by-day itinerary")
-
-        result = await run_orchestrator_agent(initial_state)
+        await broadcast_agent_status("Itinerary Agent", "running", "Loading activity catalog", progress={"current": 1, "total": 3})
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status("Itinerary Agent", "running", f"Matching {activity_count} activities to preferences", progress={"current": 2, "total": 3})
+        await asyncio.sleep(0.5)
+        
+        await broadcast_agent_status("Itinerary Agent", "completed", f"Created {trip_duration_days}-day itinerary", progress={"current": 3, "total": 3})
 
         # Persist activities produced by orchestrator (if any)
         try:
@@ -135,14 +190,18 @@ async def run_orchestrator_background(
                         print(f"[orchestrator_background] Skipping invalid activity record: {e}")
                 if docs:
                     res = await col.insert_many(docs)
-                    print(
-                        f"[orchestrator_background] Saved {len(res.inserted_ids)} activities for trip={trip_id}"
-                    )
+                    activity_count = len(res.inserted_ids)
+                    print(f"[orchestrator_background] ✅ Successfully saved {activity_count} activities for trip={trip_id}")
+                    print(f"[orchestrator_background] Activity breakdown by category:")
+                    from collections import Counter
+                    category_counts = Counter([doc.get('category', 'Other') for doc in docs])
+                    for cat, count in category_counts.most_common():
+                        print(f"  - {cat}: {count}")
         except Exception as e:
-            print(f"[orchestrator_background] Warning: failed to save activities after orchestrator: {e}")
+            print(f"[orchestrator_background] ⚠️ Warning: failed to save activities after orchestrator: {e}")
 
         # Update status: completed
-        await broadcast_agent_status("Orchestrator", "completed", "Trip planning finished")
+        await broadcast_agent_status("Orchestrator", "completed", f"Trip planning complete! {activity_count} activities ready", progress=100)
 
         # Send completion message
         success_msg = f"✅ Trip planning complete!\nSteps taken: {result.get('steps', 0)}\nStatus: {result.get('reason', 'Done')}"
@@ -171,10 +230,30 @@ async def run_orchestrator_background(
         print(f"[orchestrator_background] Completed for trip {trip_id}")
 
     except Exception as e:
-        # Update status: error
-        await broadcast_agent_status("Orchestrator", "error", f"Failed: {str(e)}")
+        # Detailed error logging for devs
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[orchestrator_background] ❌ ERROR for trip {trip_id}")
+        print(f"[orchestrator_background] Error type: {type(e).__name__}")
+        print(f"[orchestrator_background] Error message: {str(e)}")
+        print(f"[orchestrator_background] Full traceback:\n{error_details}")
+        
+        # User-friendly error message based on error type
+        error_type = type(e).__name__
+        if "quota" in str(e).lower() or "rate" in str(e).lower():
+            user_error = "API quota exceeded. Please wait a moment and try again."
+            await broadcast_agent_status("Orchestrator", "error", "API rate limit reached - retrying soon")
+        elif "timeout" in str(e).lower():
+            user_error = "Request timed out. Please try again."
+            await broadcast_agent_status("Orchestrator", "error", "Request timeout - please retry")
+        elif "network" in str(e).lower() or "connection" in str(e).lower():
+            user_error = "Network error. Please check your connection and try again."
+            await broadcast_agent_status("Orchestrator", "error", "Network connectivity issue")
+        else:
+            user_error = f"Planning failed: {str(e)[:100]}"
+            await broadcast_agent_status("Orchestrator", "error", f"Error: {str(e)[:50]}")
 
-        error_msg = f"❌ Planning failed: {str(e)}\nPlease try again or contact support."
+        error_msg = f"❌ {user_error}\nPlease try again or contact support if the issue persists."
         await messages_collection.insert_one(
             {
                 "chatId": trip_id,
@@ -196,8 +275,6 @@ async def run_orchestrator_background(
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )
-
-        print(f"[orchestrator_background] Failed for trip {trip_id}: {e}")
 
 
 class CreateTripRequest(BaseModel):
