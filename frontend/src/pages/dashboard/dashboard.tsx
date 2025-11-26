@@ -5,6 +5,7 @@ import Input from '../../components/input/Input';
 import CreateTripModal from '../trip/components/CreateTripModal.tsx';
 import TripCodeModal from '../trip/components/TripCodeModal.tsx';
 import Notification from '../../components/notification/Notification';
+import Modal from '../../components/modal/Modal.tsx';
 import { API } from '../../services/api';
 
 interface Trip {
@@ -375,30 +376,28 @@ const Dashboard = () => {
       />
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-3">Delete Trip?</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this trip? This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={cancelDelete}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
+      <Modal isOpen={showDeleteConfirm} onClose={cancelDelete}>
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold text-gray-900">Delete Trip?</h3>
+          <p className="text-gray-600">
+            Are you sure you want to delete this trip? This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={cancelDelete}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="px-4 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Delete
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };
